@@ -165,3 +165,7 @@ cython_debug/
 .vs/DQ VII Tablet Editor/v17/DocumentLayout.backup.json
 *.vsidx
 *.exe
+
+.venv/
+.pytest_cache/
+.ruff_cache/

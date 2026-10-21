@@ -1,0 +1,75 @@
+map_id,serial,name_en,name_jp,kind
+0x12E,33,Feral Forest,けものたちの森,dlc
+0x14F,66,Tough Nuts,ハンバーガー,dlc
+0x139,44,Treasure Hunt,隠された財宝！？,dlc
+0x146,57,Harvest Festival,腹ペコまつり,dlc
+0x140,51,Here Be Dragons,べんりなセブンスポット,dlc
+0x130,35,A Poisonous Party,ドキドキのパーティ,dlc
+0x141,52,Barbarous Barbershop,行列のできる美容院,dlc
+0x151,68,Sticky Business,かわいいステッキプレゼント,dlc
+0x13F,50,The Test of Slime,スライム王者決定戦！？,dlc
+0x14C,63,The Wild Woods,猛獣たちの森,dlc
+0x133,38,Demon's Den,大悪魔の住む塔,dlc
+0x11D,16,A Hero's Welcome,帰ってきたヒーロー,dlc
+0x138,43,Cloud Control,雲海の覇者,dlc
+0x117,10,Puppeteer's Palace,操り人形師の館,dlc
+0x147,58,Fantastic Feast,優雅な？晩さん,dlc
+0x144,55,The Depths of Darkness,闇の洞くつ,dlc
+0x10E,1,Feline Forest,番人がまもる森,dlc
+0x12F,34,Lizard's Lair,古の竜がすむ洞くつ,dlc
+0x150,67,Snag a Speedy Sword,すばやい剣プレゼント,dlc
+0x12B,30,Scary Lair,幻のまものたち,dlc
+0x148,59,Ghost Busting!,おばけ退治！,dlc
+0x127,74,A Beastly Treat,猛獣たちのみちくさ,dlc
+0x115,8,Gruesome Garrison,騎士たちの布陣,dlc
+0x14E,65,The Usual Suspects,証を授かりし者たち,dlc
+0x12D,32,Kooky Keep,あやしい古城,dlc
+0x10F,2,Empire of the Imp,導かれしまものたち,dlc
+0x13B,46,Palace of the Perished,死の宮殿,dlc
+0x113,6,Blackened Backwoods,最強！？黒に染まる森,dlc
+0x131,36,Muscle Mountain,力じまんたちの山,dlc
+0x152,69,Gooing Strong,かわいいトレイプレゼント,dlc
+0x145,56,Davy Jones' Locker,海底の亡霊,dlc
+0x14B,62,Mount Malign,山頂に咲く花？,dlc
+0x149,60,Infernal Kernels,Ｖジャンプ守護を得る旅,dlc
+0x14D,64,Piles of Presents!,プレゼントを取り返せ！,dlc
+0x132,37,True Steel,鋼鉄の太陽,dlc
+0x114,7,Day of the Undead,亡霊たちのパーティ,dlc
+0x13A,45,Den of the Wintry Wyrm,氷の竜がすむ洞くつ,dlc
+0x143,54,Tower of Terrible Trials,まだ見ぬ試練の城,dlc
+0x137,42,Tough Guy's Trials,Ｖジャンプ強者への試練,dlc
+0x13C,47,Leap of Faith,Ｖジャンプ幸運を求める冒険,dlc
+0x110,3,Spooky Ruins,いわくつきの廃墟,dlc
+0x134,39,To the Victor the Spoils!,おたから争奪戦！,dlc
+0x13E,49,Mount Oddna,かわりものたちの山,dlc
+0x136,41,Whipping Up a Frenzy,いこうぜTSUTAYA,dlc
+0x126,25,Magic Moments,魔法使いのゆめ,dlc
+0x116,9,Ocean's Overlord,海原の支配者,dlc
+0x127,26,Monstrous Menagerie,天空のまものたち,dlc
+0x142,53,A Voice from On High,Ｖジャンプ空からの導き,dlc
+0x122,21,Forest of Fear,狙われし森,dlc
+0x111,4,Shoreline Shoals,浅瀬のビーチ,dlc
+0x12C,31,Daredevil's Distraction,冒険者たちのみちくさ,dlc
+0x14A,61,Tower of Trickery,魔術師の塔,dlc
+0x13D,48,Purrrfect Day,シェイク,dlc
+0x112,5,Moonlit Madness,星空のまものたち,dlc
+0x135,40,Metal Medley,メタリックフェスティバル,dlc
+0x126,73,A Kind of Magic,魔術師からのプレゼント,dlc
+0x1F4,70,Memories of an Old Friend,なつかしき友の記憶,story
+0x1F5,71,The Youth of a Hero,若き日の英雄,story
+0x1F6,72,Divine Recollections,幼き大神官の思い出,story
+0x1,0,Slimetree Forest,スライムだらけの森,resident
+0xB,0,Woebegone Cave,ナスビのとれる洞くつ,resident
+0x2,0,Kingfisher Colloquy,カワセミのつどう河辺,resident
+0x18,0,Demon's Dome,小悪魔たちが暮らす山,resident
+0x1B,0,Heavy Metal Hole,ドワーフ族の洞くつ,resident
+0x1D,0,Magooma Mountain,火吹きスライムの山,resident
+0x26,0,Blimpton,風船だらけの町,resident
+0x2F,0,Crockery Crag,ポットが飛び交う山,resident
+0x30,0,Nailbiter's Nook,ツメがうなるほこら,resident
+0x42,0,Heights of Machismo,ムーチョの塔,resident
+0x37,0,Return to Slimetree Forest,続・スライムだらけの森,resident
+0x84,0,Boobytrap Bluff,ワナだらけの山,resident
+0xD9,0,Heroes' Grotto,勇者の集う洞くつ,resident
+0x6,0,Seahorse Spinney,たつのこの森,resident
+0x1B2,0,Oozantium,スライム帝国,resident
