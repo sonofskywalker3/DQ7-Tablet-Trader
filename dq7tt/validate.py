@@ -108,8 +108,33 @@ def _selfmade_problems(edited: SaveFile, original: SaveFile) -> list[Problem]:
     return []
 
 
+REMOVAL_WARNED_KINDS = frozenset({TabletKind.STORY, TabletKind.RESIDENT})
+
+
+def _removed_problems(
+    original: SaveFile, live: tuple[TabletRecord, ...], db: TabletDatabase
+) -> list[Problem]:
+    kept = {r.identity for r in live}
+    problems: list[Problem] = []
+    for rec in _live(original) or ():
+        name, kind = describe(rec, db)
+        if kind in REMOVAL_WARNED_KINDS and rec.identity not in kept:
+            problems.append(
+                _warning(
+                    "REMOVED_SPECIAL",
+                    f"{name} was removed. It came from the story or a Haven resident "
+                    "and may be hard to get back.",
+                )
+            )
+    return problems
+
+
 def _record_problems(
-    edited: SaveFile, original: SaveFile, live: tuple[TabletRecord, ...], db: TabletDatabase
+    edited: SaveFile,
+    original: SaveFile,
+    live: tuple[TabletRecord, ...],
+    db: TabletDatabase,
+    allowed: frozenset[bytes],
 ) -> list[Problem]:
     problems: list[Problem] = []
     original_live = _live(original) or ()
@@ -137,9 +162,19 @@ def _record_problems(
         if not is_new:
             continue
         info = db.lookup(rec)
-        if info is None or info.record.identity != rec.identity:
+        if rec.identity in allowed:
+            pass
+        elif info is None:
             problems.append(
                 _error("UNKNOWN_NEW", f"{name} is not a tablet this tool knows how to add.", slot)
+            )
+        elif info.record.identity != rec.identity:
+            problems.append(
+                _error(
+                    "UNKNOWN_NEW",
+                    f"{name} does not match the copy this tool knows, so it will not be added.",
+                    slot,
+                )
             )
         elif not info.verified:
             problems.append(
@@ -161,8 +196,17 @@ def _record_problems(
     return problems
 
 
-def validate(edited: SaveFile, original: SaveFile, db: TabletDatabase) -> list[Problem]:
-    """Return every problem found; ERRORs mean the edited save must not be written."""
+def validate(
+    edited: SaveFile,
+    original: SaveFile,
+    db: TabletDatabase,
+    *,
+    allowed: frozenset[bytes] = frozenset(),
+) -> list[Problem]:
+    """Return every problem found; ERRORs mean the edited save must not be written.
+
+    Identities in `allowed` came from a real save's received list and are never UNKNOWN_NEW.
+    """
     problems = _layout_problems(edited, original)
     if problems:
         return problems
@@ -185,7 +229,8 @@ def validate(edited: SaveFile, original: SaveFile, db: TabletDatabase) -> list[P
             _error("COUNT_RANGE", f"The tablet count is outside 0 to {RECEIVED_SLOTS}.")
         )
         return problems
-    problems += _record_problems(edited, original, live, db)
+    problems += _record_problems(edited, original, live, db, allowed)
+    problems += _removed_problems(original, live, db)
 
     if edited.role == SlotRole.QUICK_SAVE and _received_region(edited) != _received_region(
         original
@@ -199,8 +244,14 @@ def validate(edited: SaveFile, original: SaveFile, db: TabletDatabase) -> list[P
     return problems
 
 
-def require_valid(edited: SaveFile, original: SaveFile, db: TabletDatabase) -> None:
+def require_valid(
+    edited: SaveFile,
+    original: SaveFile,
+    db: TabletDatabase,
+    *,
+    allowed: frozenset[bytes] = frozenset(),
+) -> None:
     """Raise ValidationError carrying every problem if any of them is an ERROR."""
-    problems = validate(edited, original, db)
+    problems = validate(edited, original, db, allowed=allowed)
     if any(p.severity == Severity.ERROR for p in problems):
         raise ValidationError(problems)

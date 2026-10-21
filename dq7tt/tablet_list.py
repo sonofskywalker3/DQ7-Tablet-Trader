@@ -9,7 +9,12 @@ from dq7tt.constants import (
     RECEIVED_RECORD_SIZE,
     RECEIVED_SLOTS,
 )
-from dq7tt.errors import CorruptSaveError, DuplicateTabletError, TabletCapError
+from dq7tt.errors import (
+    CorruptSaveError,
+    DuplicateTabletError,
+    InvalidSlotError,
+    TabletCapError,
+)
 from dq7tt.tablets import TabletRecord
 
 
@@ -70,7 +75,7 @@ class ReceivedList:
     def insert_many(self, records: Sequence[TabletRecord], index: int = 0) -> "ReceivedList":
         """Insert all records starting at `index`, in order, or change nothing."""
         if not 0 <= index <= self.count:
-            raise IndexError(f"insert position {index} is outside 0..{self.count}")
+            raise InvalidSlotError(f"insert position {index} is outside 0..{self.count}")
         if len(records) > self.free:
             raise TabletCapError(
                 f"This adventure log has {self.count} of {RECEIVED_SLOTS} tablets; "
@@ -93,7 +98,7 @@ class ReceivedList:
 
     def remove(self, index: int) -> "ReceivedList":
         if not 0 <= index < self.count:
-            raise IndexError(f"tablet position {index} is outside 0..{self.count - 1}")
+            raise InvalidSlotError(f"tablet position {index} is outside 0..{self.count - 1}")
         slots = list(self.slots)
         # Shift index+1..count-1 up one; slot count-1 keeps its old record, as in the game.
         slots[index : self.count - 1] = slots[index + 1 : self.count]
@@ -102,8 +107,8 @@ class ReceivedList:
     def move(self, src: int, dst: int) -> "ReceivedList":
         """Remove the tablet at `src`, then insert it at `dst` (a post-removal position)."""
         if not 0 <= src < self.count:
-            raise IndexError(f"tablet position {src} is outside 0..{self.count - 1}")
+            raise InvalidSlotError(f"tablet position {src} is outside 0..{self.count - 1}")
         if not 0 <= dst < self.count:
-            raise IndexError(f"destination {dst} is outside 0..{self.count - 1}")
+            raise InvalidSlotError(f"destination {dst} is outside 0..{self.count - 1}")
         record = TabletRecord(self.slots[src])
         return self.remove(src).insert(record, dst)

@@ -18,3 +18,15 @@ def load_fixture(set_name: str, slot: int) -> bytes:
 def save_bytes(request: pytest.FixtureRequest) -> bytes:
     """Every fixture save in turn."""
     return request.param.read_bytes()
+
+
+@pytest.fixture(autouse=True)
+def isolated_app_folders(
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Command line runs without --app-dir must never touch the real app folders."""
+    from dq7tt.apppaths import AppPaths
+
+    root = tmp_path_factory.mktemp("default_app")
+    monkeypatch.setattr(AppPaths, "default", classmethod(lambda cls: cls.under(root)))

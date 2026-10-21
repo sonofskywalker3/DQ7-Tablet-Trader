@@ -172,3 +172,18 @@ def test_move_in_full_list() -> None:
     assert moved.count == 24
     assert moved.live[23] == full.live[0]
     assert moved.live[:23] == full.live[1:]
+
+
+def test_bad_index_raises_invalid_slot() -> None:
+    from dq7tt.errors import InvalidSlotError
+
+    target = lst("us_superkiefer", 0)
+    rec = foreign(target)
+    for call in (
+        lambda: target.insert(rec, 99),
+        lambda: target.remove(target.count + 6),
+        lambda: target.move(0, -1),
+    ):
+        with pytest.raises(InvalidSlotError) as info:
+            call()
+        assert isinstance(info.value, IndexError)

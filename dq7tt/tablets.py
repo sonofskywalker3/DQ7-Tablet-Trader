@@ -14,7 +14,7 @@ from dq7tt.constants import (
     REC_STREETPASS_FIELDS,
     RECEIVED_RECORD_SIZE,
 )
-from dq7tt.errors import CorruptSaveError
+from dq7tt.errors import CorruptSaveError, InvalidClearCountError
 
 
 class TabletKind(StrEnum):
@@ -64,7 +64,7 @@ class TabletRecord:
 
     def with_clear_count(self, n: int) -> "TabletRecord":
         if not 0 <= n <= MAX_CLEAR_COUNT:
-            raise ValueError(f"clear count {n} outside 0..{MAX_CLEAR_COUNT}")
+            raise InvalidClearCountError(f"clear count {n} outside 0..{MAX_CLEAR_COUNT}")
         data = bytearray(self.raw)
         data[REC_CLEAR_1] = n
         data[REC_CLEAR_2] = n

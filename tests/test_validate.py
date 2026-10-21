@@ -15,7 +15,7 @@ from dq7tt.constants import (
     SELFMADE_COUNT_OFFSET,
     SELFMADE_OFFSET,
 )
-from dq7tt.database import TabletDatabase, TabletInfo
+from dq7tt.database import TabletDatabase, TabletInfo, describe
 from dq7tt.errors import ValidationError
 from dq7tt.savefile import SaveFile, SlotRole
 from dq7tt.tablets import TabletKind, TabletRecord
@@ -243,3 +243,50 @@ def test_hole_in_list(orig: SaveFile, db: TabletDatabase) -> None:
     slots[1] = bytes(RECEIVED_RECORD_SIZE)
     edited = orig.with_received(replace(lst, slots=tuple(slots)))
     assert "UNKNOWN_NEW" in _codes(validate(edited, orig, db), Severity.ERROR)
+
+
+def _remove_named(save: SaveFile, db: TabletDatabase, name: str) -> SaveFile:
+    for i, rec in enumerate(save.received.live):
+        if db.lookup(rec) is not None and db.lookup(rec).name_en == name:
+            return save.with_received(save.received.remove(i))
+    raise AssertionError(f"{name} not in save")
+
+
+def test_removed_special_warning(db: TabletDatabase) -> None:
+    original = SaveFile.from_bytes(load_fixture("us_superkiefer", 0), SlotRole.QUICK_SAVE)
+    edited = _remove_named(original, db, "Slimetree Forest")
+    found = [p for p in validate(edited, original, db) if p.code == "REMOVED_SPECIAL"]
+    assert len(found) == 1
+    assert found[0].severity == Severity.WARNING
+    assert found[0].message == (
+        "Slimetree Forest was removed. It came from the story or a Haven resident "
+        "and may be hard to get back."
+    )
+
+
+def test_removed_dlc_gives_no_warning(db: TabletDatabase) -> None:
+    original = SaveFile.from_bytes(load_fixture("us_postgame", 1), SlotRole.LOG_1)
+    index = next(
+        i for i, r in enumerate(original.received.live) if describe(r, db)[1] == TabletKind.DLC
+    )
+    edited = original.with_received(original.received.remove(index))
+    assert "REMOVED_SPECIAL" not in _codes(validate(edited, original, db))
+
+
+def test_allowed_identity_not_unknown(orig: SaveFile, db: TabletDatabase) -> None:
+    rec = TabletRecord(bytes([0x11]) * RECEIVED_RECORD_SIZE)
+    edited = orig.with_received(orig.received.insert(rec))
+    assert "UNKNOWN_NEW" in _codes(validate(edited, orig, db), Severity.ERROR)
+    allowed = validate(edited, orig, db, allowed=frozenset({rec.identity}))
+    assert "UNKNOWN_NEW" not in _codes(allowed)
+
+
+def test_unknown_new_fallback_message(orig: SaveFile, db: TabletDatabase) -> None:
+    raw = bytearray(_fresh(db, orig, TabletKind.DLC).record.raw)
+    raw[0x20] ^= 0x5A
+    edited = orig.with_received(orig.received.insert(TabletRecord(bytes(raw))))
+    messages = [p.message for p in validate(edited, orig, db) if p.code == "UNKNOWN_NEW"]
+    assert any(
+        m.endswith("does not match the copy this tool knows, so it will not be added.")
+        for m in messages
+    )

@@ -1,147 +1,75 @@
 """Command line tool: list, add, copy and remove tablets, always into a new folder."""
 
 import argparse
-import sys
 from collections.abc import Sequence
-from datetime import datetime
 from pathlib import Path
 
-from dq7tt.database import TabletDatabase, describe
-from dq7tt.errors import TabletTraderError, UnknownTabletError, UsageError
-from dq7tt.folder import SaveFolder, default_output_path, write_edited
-from dq7tt.savefile import SaveFile, SlotRole
-from dq7tt.tablet_list import ReceivedList
-from dq7tt.validate import Severity, require_valid, validate
+from dq7tt import cli_bank
+from dq7tt.cli_common import (
+    EXIT_OK,
+    EXIT_REFUSED,
+    LOG_CHOICES,
+    ROLE_BY_CHOICE,
+    check_quick,
+    finish,
+    out,
+    session_scope,
+    slot_index,
+    summary,
+    target_for,
+)
+from dq7tt.errors import TabletTraderError, UnknownTabletError
+from dq7tt.session import Target
 
-EXIT_OK = 0
-EXIT_REFUSED = 2
-SECONDS_PER_MINUTE = 60
-MINUTES_PER_HOUR = 60
-QUICK_CHOICE = "quick"
-LOG_CHOICES = ("1", "2", "3", QUICK_CHOICE)
-ROLE_BY_CHOICE = {
-    "1": SlotRole.LOG_1,
-    "2": SlotRole.LOG_2,
-    "3": SlotRole.LOG_3,
-    QUICK_CHOICE: SlotRole.QUICK_SAVE,
-}
-ROLE_LABELS = {
-    SlotRole.QUICK_SAVE: "Quick save",
-    SlotRole.LOG_1: "Adventure log 1",
-    SlotRole.LOG_2: "Adventure log 2",
-    SlotRole.LOG_3: "Adventure log 3",
-}
-
-
-def out(text: str = "") -> None:
-    sys.stdout.write(text + "\n")
-
-
-def _label(role: SlotRole) -> str:
-    return ROLE_LABELS.get(role, str(role).capitalize())
-
-
-def _playtime(seconds: int) -> str:
-    minutes = seconds // SECONDS_PER_MINUTE
-    return f"{minutes // MINUTES_PER_HOUR}:{minutes % MINUTES_PER_HOUR:02d}"
-
-
-def _get_save(folder: SaveFolder, role: SlotRole) -> SaveFile:
-    try:
-        return folder.files[role]
-    except KeyError:
-        raise UsageError(f"{folder.path} has no {_label(role).lower()} save.") from None
-
-
-def _slot_index(lst: ReceivedList, slot: int, role: SlotRole) -> int:
-    """Convert the 1-based position shown by `list` to a 0-based index."""
-    if not 1 <= slot <= lst.count:
-        raise UsageError(
-            f"{_label(role)} has {lst.count} tablets, so position {slot} does not exist."
-        )
-    return slot - 1
-
-
-def _check_quick(role: SlotRole, allow: bool) -> None:
-    if role == SlotRole.QUICK_SAVE and not allow:
-        raise UsageError(
-            "The quick save may be discarded by the game. Add --allow-quick-save to edit it anyway."
-        )
-
-
-def _finish(
-    folder: SaveFolder,
-    role: SlotRole,
-    edited: SaveFile,
-    out_dir: Path | None,
-    db: TabletDatabase,
-    protect: Sequence[Path] = (),
-) -> None:
-    """Validate, write the new folder next to the input (or at `out_dir`), and report it."""
-    original = _get_save(folder, role)
-    require_valid(edited, original, db)
-    for problem in validate(edited, original, db):
-        if problem.severity == Severity.WARNING:
-            out(f"Warning: {problem.message}")
-    target = out_dir if out_dir is not None else default_output_path(folder.path, datetime.now())
-    write_edited(folder.path, target, {role: edited}, protect)
-    out(f"Wrote {target}")
+__all__ = ["EXIT_OK", "EXIT_REFUSED", "build_parser", "main", "out"]
 
 
 def cmd_list(args: argparse.Namespace) -> None:
-    db = TabletDatabase.load()
-    folder = SaveFolder.open(args.path)
-    for role, save in folder.files.items():
-        lst = save.received
-        out(
-            f"{_label(role)}: {save.hero_name}, {_playtime(save.playtime_seconds)}, "
-            f"{lst.count}/{len(lst.slots)}"
-        )
-        for i, rec in enumerate(lst.live, start=1):
-            name, kind = describe(rec, db)
-            out(f"  {i:2d}. {name} [{kind.value}] cleared {rec.clear_count}")
+    with session_scope(args) as (session, _):
+        source_id = session.open(args.path)
+        for role, save in session.sources()[source_id].edited.items():
+            out(summary(role, save))
+            for i, (name, kind, record) in enumerate(
+                session.tablets(Target(source_id, role)), start=1
+            ):
+                out(f"  {i:2d}. {name} [{kind.value}] cleared {record.clear_count}")
 
 
 def cmd_add(args: argparse.Namespace) -> None:
-    db = TabletDatabase.load()
     role = ROLE_BY_CHOICE[args.log]
-    _check_quick(role, args.allow_quick_save)
-    info = db.by_name(args.tablet)
-    if not info.verified:
-        raise UnknownTabletError(
-            f"{info.name_en} has not been tested on a real save yet, so it cannot be added."
-        )
-    folder = SaveFolder.open(args.path)
-    save = _get_save(folder, role)
-    edited = save.with_received(save.received.insert(info.record, 0))
-    _finish(folder, role, edited, args.out, db)
+    check_quick(role, args.allow_quick_save)
+    with session_scope(args) as (session, paths):
+        info = session.db.by_name(args.tablet)
+        if not info.verified:
+            raise UnknownTabletError(
+                f"{info.name_en} has not been tested on a real save yet, so it cannot be added."
+            )
+        source_id = session.open(args.path)
+        session.add_from_database(target_for(session, source_id, args.log), info.name_en)
+        finish(session, paths, source_id, args.out)
 
 
 def cmd_copy(args: argparse.Namespace) -> None:
-    db = TabletDatabase.load()
-    from_role, to_role = ROLE_BY_CHOICE[args.from_log], ROLE_BY_CHOICE[args.to_log]
-    _check_quick(to_role, args.allow_quick_save)
-    source = SaveFolder.open(args.src_path)
-    target = source if args.dst_path.resolve() == args.src_path.resolve() else None
-    target = target or SaveFolder.open(args.dst_path)
-    from_save = _get_save(source, from_role)
-    record = from_save.received.live[_slot_index(from_save.received, args.slot, from_role)]
-    if args.reset_clears:
-        record = record.with_clear_count(0)
-    to_save = _get_save(target, to_role)
-    edited = to_save.with_received(to_save.received.insert(record, 0))
-    _finish(target, to_role, edited, args.out, db, protect=[source.path])
+    to_role = ROLE_BY_CHOICE[args.to_log]
+    check_quick(to_role, args.allow_quick_save)
+    with session_scope(args) as (session, paths):
+        src_id = session.open(args.src_path)
+        same = args.dst_path.resolve() == args.src_path.resolve()
+        dst_id = src_id if same else session.open(args.dst_path)
+        src = target_for(session, src_id, args.from_log)
+        dst = target_for(session, dst_id, args.to_log)
+        index = slot_index(session, src, args.slot)
+        session.copy(src, index, dst, reset_clears=args.reset_clears)
+        finish(session, paths, dst_id, args.out)
 
 
 def cmd_remove(args: argparse.Namespace) -> None:
-    db = TabletDatabase.load()
-    role = ROLE_BY_CHOICE[args.log]
-    _check_quick(role, args.allow_quick_save)
-    folder = SaveFolder.open(args.path)
-    save = _get_save(folder, role)
-    index = _slot_index(save.received, args.slot, role)
-    edited = save.with_received(save.received.remove(index))
-    _finish(folder, role, edited, args.out, db)
+    check_quick(ROLE_BY_CHOICE[args.log], args.allow_quick_save)
+    with session_scope(args) as (session, paths):
+        source_id = session.open(args.path)
+        target = target_for(session, source_id, args.log)
+        session.remove(target, slot_index(session, target, args.slot))
+        finish(session, paths, source_id, args.out)
 
 
 def _add_write_options(p: argparse.ArgumentParser) -> None:
@@ -152,6 +80,9 @@ def _add_write_options(p: argparse.ArgumentParser) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="dq7tt", description="Edit Dragon Quest VII tablets in a copy of your save folder."
+    )
+    parser.add_argument(
+        "--app-dir", type=Path, help="keep bank, backups and edited saves here (default: standard)"
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -182,6 +113,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--slot", type=int, required=True, help="position shown by list, from 1")
     _add_write_options(p)
     p.set_defaults(func=cmd_remove)
+
+    cli_bank.add_parsers(sub)
     return parser
 
 

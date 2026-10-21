@@ -76,3 +76,12 @@ def test_live_serials_in_range(save_bytes: bytes) -> None:
         start = RECEIVED_OFFSET + i * RECEIVED_RECORD_SIZE
         rec = TabletRecord(save_bytes[start : start + RECEIVED_RECORD_SIZE])
         assert rec.serial <= MAX_DLC_SERIAL
+
+
+def test_bad_clear_count_raises_typed() -> None:
+    from dq7tt.errors import InvalidClearCountError
+
+    rec = record("us_postgame", 0, 4)
+    with pytest.raises(InvalidClearCountError) as info:
+        rec.with_clear_count(256)
+    assert isinstance(info.value, ValueError)

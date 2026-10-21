@@ -52,7 +52,7 @@ def default_output_path(src: Path, now: datetime) -> Path:
     return src.parent / OUTPUT_NAME_FORMAT.format(name=src.name, now=now)
 
 
-def _check_destination(inputs: Sequence[Path], dst: Path) -> None:
+def check_destination(inputs: Sequence[Path], dst: Path) -> None:
     dst_abs = dst.resolve()
     for folder in inputs:
         folder_abs = folder.resolve()
@@ -71,7 +71,7 @@ def write_edited(
     last, so `dst` only ever appears complete. `protect` lists further input folders that
     `dst` must not be, or be inside (nothing is created there, not even the staging folder).
     """
-    _check_destination([src, *protect], dst)
+    check_destination([src, *protect], dst)
     dst.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=TEMP_DIR_PREFIX, dir=dst.parent))
     try:

@@ -32,7 +32,7 @@ The last 0x10 bytes are not always zero: us_postgame save000 and save001 hold 0x
 
 ### Slots
 
-A game folder holds `save000.bin` to `save003.bin`. `save000` appears to be the quick (suspend) save and `save001` to `save003` the three adventure logs. This is inferred: the quick save holds the real map id at 0x0270 while every log holds 0x04DF there, and the quick save never has the game-cleared flag set. No header byte marks a quick save. What an empty slot looks like is unknown, since every sample slot is populated.
+A game folder holds `save000.bin` to `save003.bin`. `save000` appears to be the quick (suspend) save and `save001` to `save003` the three adventure logs. This is inferred: the quick save holds the map id of where it was made at 0x0270, every sample log holds 0x04DF (The Haven) there, and the quick save never has the game-cleared flag set. No header byte marks a quick save. What an empty slot looks like is unknown, since every sample slot is populated.
 
 ## 2. Chunk chain
 
@@ -73,7 +73,7 @@ A reader should walk the chain and refuse any file whose tags differ from this l
 | Offset | Size | Meaning | Status |
 | --- | --- | --- | --- |
 | 0x00 | u32 | checksum | Verified |
-| 0x0270 | u16 | current map id (quick save only; logs hold 0x04DF) | Verified value, meaning inferred |
+| 0x0270 | u16 | map id where the file was saved (0x04DF = The Haven in every sample log; a log saved in Pilchard Bay holds 0x0194) | Verified value, meaning inferred |
 | 0x0E30 | 26 bytes | hero name, UTF-8, NUL padded; a second copy sits at 0x0E4A | Verified |
 | 0x3250 | u32 | playtime in frames at 30 frames per second (hours = value / 30 / 3600) | Verified |
 | 0x3254 | u32 | owner (console) id; same value as in `system.bin` | Verified (use unverified) |

@@ -5,7 +5,10 @@ description = "Tablet manager for Dragon Quest VII (3DS) saves"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "GPL-3.0-or-later"
-dependencies = []
+dependencies = [
+    "platformdirs>=4.13.5",
+    "send2trash>=2.1.0",
+]
 
 [project.scripts]
 dq7tt = "dq7tt.cli:main"

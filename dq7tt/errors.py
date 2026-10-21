@@ -45,3 +45,27 @@ class OutputExistsError(TabletTraderError):
 
 class UsageError(TabletTraderError):
     """The request cannot be carried out as given (missing log, bad position, missing flag)."""
+
+
+class InvalidSlotError(TabletTraderError, IndexError):
+    """A tablet position is outside the list."""
+
+
+class InvalidClearCountError(TabletTraderError, ValueError):
+    """A clear count is outside the range a record can hold."""
+
+
+class UnsupportedSourceError(TabletTraderError):
+    """The path is not a Dragon Quest VII save this tool can read."""
+
+
+class SaveIOError(TabletTraderError):
+    """A file or folder could not be read or written."""
+
+
+class BankFileError(TabletTraderError):
+    """A bank file is damaged, hand-edited or from an unknown version."""
+
+
+class SessionError(TabletTraderError):
+    """The request cannot be carried out in the current session."""

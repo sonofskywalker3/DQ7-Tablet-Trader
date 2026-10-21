@@ -196,3 +196,17 @@ def test_add_refuses_unverified_tablet(tmp_path: Path, capsys: pytest.CaptureFix
     assert main(["add", str(src), "--log", "3", "--tablet", "Blimpton"]) == 2
     assert "tested" in capsys.readouterr().out
     assert others(tmp_path, "pal") == []
+
+
+def test_cli_out_survives_cp1252(monkeypatch: pytest.MonkeyPatch) -> None:
+    import io
+    import sys
+
+    from dq7tt.cli import out
+
+    raw = io.BytesIO()
+    wrapper = io.TextIOWrapper(raw, encoding="cp1252", newline=chr(10))
+    monkeypatch.setattr(sys, "stdout", wrapper)
+    out("Hero \ufffd")
+    wrapper.flush()
+    assert raw.getvalue() == b"Hero ?\n"
