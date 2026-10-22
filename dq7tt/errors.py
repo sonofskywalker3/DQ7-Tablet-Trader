@@ -1,6 +1,7 @@
 """Exceptions raised by the tablet trader."""
 
 from collections.abc import Sequence
+from enum import StrEnum
 
 
 class TabletTraderError(Exception):
@@ -24,7 +25,11 @@ class TabletCapError(TabletTraderError):
 
 
 class DuplicateTabletError(TabletTraderError):
-    """The tablet is already present."""
+    """The tablet is already present; `name` names it when the raiser knows it."""
+
+    def __init__(self, message: str, name: str | None = None) -> None:
+        super().__init__(message)
+        self.name = name
 
 
 class UnknownTabletError(TabletTraderError):
@@ -63,8 +68,31 @@ class SaveIOError(TabletTraderError):
     """A file or folder could not be read or written."""
 
 
+class BankProblem(StrEnum):
+    """Why a bank file or folder was refused, for callers that word it themselves."""
+
+    EXISTS = "exists"
+    MISSING = "missing"
+    EMPTY = "empty"
+    HIDDEN = "hidden"
+    BAD_CHARACTERS = "bad characters"
+    TRAILING = "trailing"
+    RESERVED = "reserved"
+    DAMAGED = "damaged"
+    UNREADABLE = "unreadable"
+    OUTSIDE = "outside"
+    NOT_TABLET = "not a tablet"
+
+
 class BankFileError(TabletTraderError):
-    """A bank file is damaged, hand-edited or from an unknown version."""
+    """A bank file is damaged, hand-edited or from an unknown version, or a folder name is bad.
+
+    `reason` says which, when the raiser knows it.
+    """
+
+    def __init__(self, message: str, reason: BankProblem | None = None) -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 class SessionError(TabletTraderError):

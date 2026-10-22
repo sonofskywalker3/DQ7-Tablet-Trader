@@ -20,6 +20,9 @@ NO_CLEARS = 0
 SINGLE = 1
 SELFMADE_REFUSED = "Self-made tablets can be banked but not added to a save yet."
 NOTHING_SELECTED = "Select at least one tablet first."
+PICKED_TWICE = "The same tablet was picked twice."
+NOT_CLEARED = "That tablet has not been cleared."
+NONE_CLEARED = "None of those tablets have been cleared."
 Changes = dict[tuple[int, SlotRole], SaveFile]
 
 
@@ -54,10 +57,20 @@ class Session(SessionCore):
     # Changing one log
 
     def remove(self, target: Target, slot: int) -> None:
+        self.remove_many(target, [slot])
+
+    def remove_many(self, target: Target, slots: Sequence[int]) -> None:
+        """Take the tablets at `slots` out of one log; one step, all or none."""
         save = self._save(target)
-        name = tablet_name(record_at(save, slot), self._db)
-        new = save.with_received(save.received.remove(slot))
-        self._apply({self._key(target): new}, f"Remove {name} from {role_name(target.role)}")
+        records = self._picked(save, slots)
+        lst = save.received
+        for slot in sorted(slots, reverse=True):
+            lst = lst.remove(slot)
+        what = self._what([tablet_name(r, self._db) for r in records])
+        self._apply(
+            {self._key(target): save.with_received(lst)},
+            f"Remove {what} from {role_name(target.role)}",
+        )
 
     def move(self, target: Target, src: int, dst: int) -> None:
         save = self._save(target)
@@ -66,18 +79,28 @@ class Session(SessionCore):
         self._apply({self._key(target): new}, f"Reorder {name} in {role_name(target.role)}")
 
     def reset_clears(self, target: Target, slot: int) -> None:
+        self.reset_clears_many(target, [slot])
+
+    def reset_clears_many(self, target: Target, slots: Sequence[int]) -> None:
+        """Set the clear counts of the picked tablets to 0, skipping uncleared ones; one step."""
         save = self._save(target)
-        record = record_at(save, slot)
-        if record.clear_count == NO_CLEARS and record.clear_counts_agree:
-            raise SessionError("That tablet has not been cleared.")
+        records = self._picked(save, slots)
+        cleared = [
+            (slot, record)
+            for slot, record in zip(slots, records, strict=True)
+            if record.clear_count != NO_CLEARS or not record.clear_counts_agree
+        ]
+        if not cleared:
+            raise SessionError(NOT_CLEARED if len(slots) == SINGLE else NONE_CLEARED)
         lst = save.received
-        slots = list(lst.slots)
-        slots[slot] = record.with_clear_count(NO_CLEARS).raw
-        new = save.with_received(ReceivedList(slots=tuple(slots), count=lst.count))
-        name = tablet_name(record, self._db)
-        self._apply(
-            {self._key(target): new}, f"Reset clear count of {name} in {role_name(target.role)}"
-        )
+        raw = list(lst.slots)
+        for slot, record in cleared:
+            raw[slot] = record.with_clear_count(NO_CLEARS).raw
+        new = save.with_received(ReceivedList(slots=tuple(raw), count=lst.count))
+        names = [tablet_name(record, self._db) for _, record in cleared]
+        what = self._what(names)
+        noun = "clear count" if len(names) == SINGLE else "clear counts"
+        self._apply({self._key(target): new}, f"Reset {noun} of {what} in {role_name(target.role)}")
 
     # Copying and moving between logs
 
@@ -147,6 +170,14 @@ class Session(SessionCore):
         source = self._source(target.source_id)
         from_real = self._is_real(record)
         return bank.add(record, folder, self._db, source.label, source.region.value, from_real)
+
+    def _picked(self, save: SaveFile, slots: Sequence[int]) -> list[TabletRecord]:
+        """The records at `slots`; refuses an empty pick, a repeat, or a slot past the end."""
+        if not slots:
+            raise SessionError(NOTHING_SELECTED)
+        if len(set(slots)) != len(slots):
+            raise SessionError(PICKED_TWICE)
+        return [record_at(save, slot) for slot in slots]
 
     def _what(self, names: Sequence[str]) -> str:
         return names[0] if len(names) == SINGLE else f"{len(names)} tablets"

@@ -14,7 +14,7 @@ import send2trash
 
 from dq7tt.constants import RECEIVED_RECORD_SIZE, SELFMADE_RECORD_SIZE
 from dq7tt.database import TabletDatabase, describe
-from dq7tt.errors import BankFileError, DuplicateTabletError, SaveIOError
+from dq7tt.errors import BankFileError, BankProblem, DuplicateTabletError, SaveIOError
 from dq7tt.savefile import SaveFile
 from dq7tt.tablets import TabletKind, TabletRecord
 
@@ -99,24 +99,26 @@ def safe_file_stem(name: str) -> str:
 
 def _check_folder_name(name: str) -> None:
     problem = None
+    reason = BankProblem.EMPTY
     if not name:
         problem = "is empty"
     elif name in (".", "..") or name.startswith(HIDDEN_PREFIX):
-        problem = "must not start with a dot"
+        problem, reason = "must not start with a dot", BankProblem.HIDDEN
     elif UNSAFE_CHARS.search(name):
         problem = "contains a character that is not allowed in a folder name"
+        reason = BankProblem.BAD_CHARACTERS
     elif name != name.rstrip(TRAILING_JUNK):
-        problem = "must not end with a space or dot"
+        problem, reason = "must not end with a space or dot", BankProblem.TRAILING
     elif name.split(".", 1)[0].lower() in RESERVED_NAMES:
-        problem = "is a reserved name"
+        problem, reason = "is a reserved name", BankProblem.RESERVED
     if problem is not None:
-        raise BankFileError(f"folder name {name!r} {problem}")
+        raise BankFileError(f"folder name {name!r} {problem}", reason)
 
 
 def _field(data: dict[str, object], key: str, kind: type) -> object:
     value = data.get(key)
     if not isinstance(value, kind) or (kind is int and isinstance(value, bool)):
-        raise BankFileError(f"field {key!r} is missing or has the wrong type")
+        raise BankFileError(f"field {key!r} is missing or has the wrong type", BankProblem.DAMAGED)
     return value
 
 
@@ -124,31 +126,33 @@ def _parse(path: Path, text: str) -> BankTablet:
     try:
         data = json.loads(text)
     except ValueError as exc:
-        raise BankFileError(f"{path.name} is not valid JSON") from exc
+        raise BankFileError(f"{path.name} is not valid JSON", BankProblem.DAMAGED) from exc
     if not isinstance(data, dict):
-        raise BankFileError(f"{path.name} is not a tablet file")
+        raise BankFileError(f"{path.name} is not a tablet file", BankProblem.DAMAGED)
     version = data.get("format")
     if not isinstance(version, int) or isinstance(version, bool) or version != BANK_FORMAT:
-        raise BankFileError(f"{path.name} has an unknown format version")
+        raise BankFileError(f"{path.name} has an unknown format version", BankProblem.DAMAGED)
     if data.get("layout") != BANK_LAYOUT:
-        raise BankFileError(f"{path.name} is not a {BANK_LAYOUT} layout tablet")
+        raise BankFileError(
+            f"{path.name} is not a {BANK_LAYOUT} layout tablet", BankProblem.DAMAGED
+        )
     try:
         list_kind = BankList(data.get("list"))
     except ValueError as exc:
-        raise BankFileError(f"{path.name} names an unknown list") from exc
+        raise BankFileError(f"{path.name} names an unknown list", BankProblem.DAMAGED) from exc
     try:
         hex_text = str(_field(data, "record_hex", str))
         if any(c.isspace() for c in hex_text):
             raise ValueError("whitespace in record_hex")
         raw = bytes.fromhex(hex_text)
     except ValueError as exc:
-        raise BankFileError(f"{path.name} has damaged record data") from exc
+        raise BankFileError(f"{path.name} has damaged record data", BankProblem.DAMAGED) from exc
     if len(raw) != RECORD_SIZES[list_kind]:
-        raise BankFileError(f"{path.name} has a record of the wrong length")
+        raise BankFileError(f"{path.name} has a record of the wrong length", BankProblem.DAMAGED)
     try:
         kind = TabletKind(_field(data, "kind", str))
     except ValueError as exc:
-        raise BankFileError(f"{path.name} has an unknown tablet kind") from exc
+        raise BankFileError(f"{path.name} has an unknown tablet kind", BankProblem.DAMAGED) from exc
     if list_kind is BankList.SELFMADE:
         kind = TabletKind.UNKNOWN
     return BankTablet(
@@ -206,7 +210,7 @@ class Bank:
         _check_folder_name(name)
         target = self.root / name
         if target.exists():
-            raise BankFileError(f"folder {name!r} already exists")
+            raise BankFileError(f"folder {name!r} already exists", BankProblem.EXISTS)
         try:
             target.mkdir(parents=True)
         except OSError as exc:
@@ -217,10 +221,10 @@ class Bank:
         _check_folder_name(new)
         source, target = self.root / old, self.root / new
         if not source.is_dir():
-            raise BankFileError(f"folder {old!r} does not exist")
+            raise BankFileError(f"folder {old!r} does not exist", BankProblem.MISSING)
         case_only = old != new and old.lower() == new.lower()
         if target.exists() and not case_only:
-            raise BankFileError(f"folder {new!r} already exists")
+            raise BankFileError(f"folder {new!r} already exists", BankProblem.EXISTS)
         try:
             source.rename(target)
         except OSError as exc:
@@ -232,7 +236,9 @@ class Bank:
         try:
             text = Path(path).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as exc:
-            raise BankFileError(f"could not read {Path(path).name}: {exc}") from exc
+            raise BankFileError(
+                f"could not read {Path(path).name}: {exc}", BankProblem.UNREADABLE
+            ) from exc
         return _parse(Path(path), text)
 
     def list(self, folder: str) -> BankTabletList:
@@ -301,7 +307,9 @@ class Bank:
             if skip is not None and t.path.resolve() == skip:
                 continue
             if t.list_kind is tablet.list_kind and t.identity == tablet.identity:
-                raise DuplicateTabletError(f"{tablet.name} is already in {folder or 'the bank'}")
+                raise DuplicateTabletError(
+                    f"{tablet.name} is already in {folder or 'the bank'}", tablet.name
+                )
 
     def add(
         self,
@@ -344,7 +352,7 @@ class Bank:
             resolved = Path(path).resolve()
             resolved.relative_to(self.root.resolve())
         except (ValueError, OSError) as exc:
-            raise BankFileError(f"{path} is not inside the bank") from exc
+            raise BankFileError(f"{path} is not inside the bank", BankProblem.OUTSIDE) from exc
         return resolved
 
     def move(self, paths: Sequence[Path], folder: str) -> PathList:
@@ -360,7 +368,7 @@ class Bank:
                 continue
             key = (tablet.list_kind, tablet.identity)
             if key in seen:
-                raise DuplicateTabletError(f"{tablet.name} appears twice in this move")
+                raise DuplicateTabletError(f"{tablet.name} appears twice in this move", tablet.name)
             seen.add(key)
             self._check_not_duplicate(folder, tablet, tablet.path)
         moved: list[Path] = []
@@ -382,7 +390,9 @@ class Bank:
         resolved = [self._check_inside(p) for p in paths]
         for path in resolved:
             if path == root or not path.is_file() or path.suffix != BANK_EXTENSION:
-                raise BankFileError(f"{path.name} is not a tablet file in the bank")
+                raise BankFileError(
+                    f"{path.name} is not a tablet file in the bank", BankProblem.NOT_TABLET
+                )
         for path in resolved:
             try:
                 send2trash.send2trash(str(path))

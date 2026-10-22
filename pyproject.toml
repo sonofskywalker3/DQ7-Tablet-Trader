@@ -6,23 +6,32 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "GPL-3.0-or-later"
 dependencies = [
+    "flet==1.0.4",
+    "flet-desktop==1.0.4",
     "platformdirs>=4.13.5",
     "send2trash>=2.1.0",
 ]
 
 [project.scripts]
 dq7tt = "dq7tt.cli:main"
+dq7tt-gui = "dq7tt_gui.main:run"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["dq7tt"]
+packages = ["dq7tt", "dq7tt_gui"]
 include = ["dq7tt/data/*.json"]
 
 [dependency-groups]
-dev = ["pytest", "ruff"]
+dev = [
+    "fonttools>=4.67.0",
+    "pillow>=13.0.0",
+    "pyinstaller>=6.22.3",
+    "pytest",
+    "ruff",
+]
 
 [tool.ruff]
 line-length = 100

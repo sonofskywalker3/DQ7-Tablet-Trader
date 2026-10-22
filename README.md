@@ -6,6 +6,71 @@ It is a tablet manager for Dragon Quest VII (3DS) saves, now that the tablet ser
 
 Status: in development, not released.
 
+## Download and run
+
+Download `DQ7 Tablet Trader.exe` from the releases page once there is one (there is no release yet) and double-click it. There is nothing to install. The first start takes a few seconds while the app unpacks itself.
+
+Windows or your antivirus may warn about the file, because the exe is not signed with a paid publisher certificate. This is common for small free tools. If you would rather not run an unsigned exe, run the app from source instead (below).
+
+The app writes a small log file to `%LOCALAPPDATA%\DQ7 Tablet Trader\logs`, which helps if you need to report a problem.
+
+## Using the window
+
+**The app never changes your original save.** Every edit is written to a new copy, and a backup is taken first. Your Checkpoint, JKSM or Azahar save stays exactly as it was until you choose to put an edited copy back yourself.
+
+### Open and find saves
+
+- Use Open save to pick a Checkpoint or JKSM backup folder, an Azahar save folder, any folder holding `save000.bin` to `save003.bin`, a single save file, or a zip.
+- Use Find saves to scan your Azahar, Citra and Lime3DS data folders and removable drives for Dragon Quest VII saves.
+- US and European saves work; Japanese saves are refused for now.
+- You can open two saves at once and move tablets between them.
+
+### Select and copy tablets
+
+Each adventure log (1, 2 and 3) and the quick save shows its Traveller's Tablets, each with a carved stone and its kind written in colour: DLC, Story, Resident, StreetPass or Unknown. Select one or more tablets, then copy them to another log, drag them to the other pane, or remove them. In a narrow window, or on a touch screen, use Send to... instead of dragging; the grip at the start of each row still reorders a log. A copied tablet keeps its clear count unless you choose to reset the clears.
+
+- The quick save is collapsed by default, and the first edit to it each session asks you to confirm.
+- Removing a Story or Resident tablet, and adding a Story tablet, asks you to confirm first.
+- A log cannot go over the game's tablet limit, and the same tablet cannot be added twice. The app tells you instead of changing anything.
+- If you close the window, close a save or open another one with edits that are not written yet, the app asks first. Discard is the only way to lose them.
+
+### The bank
+
+The bank is your own shelf of tablets that lives outside any save. Use Bank all tablets in this log (in the More menu in a narrow window) to bank a whole log, bank single tablets with Copy to... or by dragging, and add a banked tablet to a log later. Banked tablets can be sorted into folders and moved between them; a tablet taken from the bank into a log is always a copy, so the bank keeps it. The bank is kept in the app's data folder, so it survives between saves and sessions.
+
+### Writing and where the files go
+
+Press Write changes to save your edits as a new copy. The window tells you where it went.
+
+- Checkpoint, JKSM and plain folders: a new folder next to the one you opened.
+- A single save file: a new file next to it.
+- Zip files and Azahar saves: a folder under `Documents\DQ7 Tablet Trader\edited`.
+
+Backups taken before each write are kept in the app's data folder (`%LOCALAPPDATA%\DQ7 Tablet Trader\backups`).
+
+**Checkpoint and JKSM:** the edited copy shows up as a new backup in the Checkpoint or JKSM restore list on your 3DS once the folder is on the SD card. Restore that backup to use the edited save.
+
+### Put into Azahar
+
+For an Azahar save, after writing, the app offers Put into Azahar. If you choose Not now, the Put into Azahar button stays on the save's pane (in the More menu in a narrow window) until you make another change. Close Azahar first. The app checks the edited saves, backs up the Azahar save folder, then copies the edited saves in and tells you where the backup is.
+
+Edited saves are unverified on a real 3DS until tested, so keep your backups.
+
+### Not there yet
+
+Dragging a save in from Windows Explorer, and editing self-made or StreetPass tablets, are not available yet.
+
+## Run from source
+
+You need [uv](https://docs.astral.sh/uv/). From the project folder:
+
+```
+uv sync
+uv run dq7tt-gui
+```
+
+To build the exe yourself: `uv run python tools/build_windows.py`. The result is in `dist`.
+
 ## Fixed in this version
 
 - Upstream #1, #3: no spreadsheet step; saves are opened directly and the checksum and tablet count are always written. https://github.com/DSModdingTools/DQ-VII-Tablet-Editor/issues/1 https://github.com/DSModdingTools/DQ-VII-Tablet-Editor/issues/3
@@ -17,6 +82,9 @@ Status: in development, not released.
 - ABZB: the original editor and the tablet records.
 - turtle-insect/DQ7: research on hero name, playtime and save chunks.
 - DaniPhoFani and Gronya: the preserved saves used for testing.
+- Fonts: Sorts Mill Goudy by Barry Schwartz and Cinzel by the Cinzel Project Authors, both under the SIL Open Font License 1.1. The licence texts ship beside the fonts in `dq7tt_gui/assets/fonts`.
+- The window's text uses Sorts Mill Goudy Lining, a copy of Sorts Mill Goudy made by `tools/build_lining_font.py` so that plain digits draw as the font's own lining figures; it keeps the same licence.
+- The window's parchment, border bands, compass rose, pointer and tablet stones are drawn for this app by `tools/build_gui_art.py`; no game art is used.
 
 ## Command line (for testing)
 

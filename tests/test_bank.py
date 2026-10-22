@@ -7,7 +7,7 @@ import send2trash
 
 from dq7tt.bank import BANK_EXTENSION, Bank, BankList, safe_file_stem
 from dq7tt.database import TabletDatabase
-from dq7tt.errors import BankFileError, DuplicateTabletError, SaveIOError
+from dq7tt.errors import BankFileError, BankProblem, DuplicateTabletError, SaveIOError
 from dq7tt.savefile import SaveFile
 from dq7tt.tablets import TabletKind, TabletRecord
 from tests.conftest import FIXTURES
@@ -421,3 +421,60 @@ def test_publish_never_overwrites_late_target(bank: Bank) -> None:
     assert existing.read_text() == "old"
     assert target.name == f"X (2){BANK_EXTENSION}"
     assert target.read_text() == "new"
+
+
+@pytest.mark.parametrize(
+    ("name", "reason"),
+    [
+        ("", BankProblem.EMPTY),
+        (".hidden", BankProblem.HIDDEN),
+        ("a/b", BankProblem.BAD_CHARACTERS),
+        ("trailing.", BankProblem.TRAILING),
+        ("con", BankProblem.RESERVED),
+    ],
+)
+def test_folder_name_refusals_carry_a_reason(bank: Bank, name: str, reason: BankProblem) -> None:
+    with pytest.raises(BankFileError) as caught:
+        bank.create_folder(name)
+    assert caught.value.reason is reason
+    assert str(caught.value).startswith(f"folder name {name!r} ")
+
+
+def test_folder_and_file_refusals_carry_a_reason(
+    bank: Bank, db: TabletDatabase, tmp_path: Path
+) -> None:
+    bank.create_folder("Rares")
+    with pytest.raises(BankFileError) as caught:
+        bank.create_folder("Rares")
+    assert caught.value.reason is BankProblem.EXISTS
+    assert str(caught.value) == "folder 'Rares' already exists"
+    with pytest.raises(BankFileError) as caught:
+        bank.rename_folder("Missing", "Other")
+    assert caught.value.reason is BankProblem.MISSING
+    broken = bank.root / f"Broken{BANK_EXTENSION}"
+    broken.write_text("not json", encoding="utf-8")
+    with pytest.raises(BankFileError) as caught:
+        bank.read(broken)
+    assert caught.value.reason is BankProblem.DAMAGED
+    with pytest.raises(BankFileError) as caught:
+        bank.read(bank.root / f"Gone{BANK_EXTENSION}")
+    assert caught.value.reason is BankProblem.UNREADABLE
+    outside = tmp_path / f"Outside{BANK_EXTENSION}"
+    outside.write_text("{}", encoding="utf-8")
+    with pytest.raises(BankFileError) as caught:
+        bank.delete([outside])
+    assert caught.value.reason is BankProblem.OUTSIDE
+    with pytest.raises(BankFileError) as caught:
+        bank.delete([bank.root / "Rares"])
+    assert caught.value.reason is BankProblem.NOT_TABLET
+
+
+def test_duplicates_name_the_tablet(bank: Bank, db: TabletDatabase) -> None:
+    record = first_record()
+    bank.add(record, "", db, "test", "US", True)
+    with pytest.raises(DuplicateTabletError) as caught:
+        bank.add(record, "", db, "test", "US", True)
+    name = db.lookup(record).name_en
+    assert caught.value.name == name
+    assert str(caught.value) == f"{name} is already in the bank"
+    assert not issubclass(DuplicateTabletError, BankFileError)

@@ -18,7 +18,7 @@ from test_sources import fill
 from dq7tt.apppaths import AppPaths
 from dq7tt.bank import Bank, BankList
 from dq7tt.database import TabletDatabase
-from dq7tt.errors import DuplicateTabletError, SessionError, TabletCapError
+from dq7tt.errors import DuplicateTabletError, InvalidSlotError, SessionError, TabletCapError
 from dq7tt.savefile import SlotRole
 from dq7tt.session import Session, Target
 
@@ -186,3 +186,51 @@ def test_bank_all_marks_database_additions_not_real(tmp_path: Path) -> None:
     assert all(by_name.values())
     assert session.bank_all(target, bank, "Mine") == []
     assert session.undo_label == "Add Divine Recollections to adventure log 2"
+
+
+def test_remove_many_is_one_step(tmp_path: Path) -> None:
+    session, us, _ = two_sources(tmp_path)
+    target = Target(us, SlotRole.LOG_2)
+    start = names(session, us, SlotRole.LOG_2)
+    before = all_bytes(session)
+    session.remove_many(target, [3, 0, 5])
+    assert names(session, us, SlotRole.LOG_2) == [
+        n for i, n in enumerate(start) if i not in {0, 3, 5}
+    ]
+    assert session.undo() == "Remove 3 tablets from adventure log 2"
+    assert all_bytes(session) == before
+    assert not session.can_undo
+    session.remove_many(target, [1])
+    assert session.undo_label == f"Remove {start[1]} from adventure log 2"
+
+
+def test_remove_many_refusals_change_nothing(tmp_path: Path) -> None:
+    session, us, _ = two_sources(tmp_path)
+    target = Target(us, SlotRole.LOG_2)
+    before = all_bytes(session)
+    with pytest.raises(SessionError, match="Select"):
+        session.remove_many(target, [])
+    with pytest.raises(InvalidSlotError):
+        session.remove_many(target, [0, 99])
+    with pytest.raises(SessionError, match="twice"):
+        session.remove_many(target, [2, 2])
+    assert all_bytes(session) == before
+    assert not session.can_undo
+
+
+def test_reset_clears_many_skips_uncleared_ones(tmp_path: Path) -> None:
+    session, us, _ = two_sources(tmp_path)
+    target = Target(us, SlotRole.QUICK_SAVE)
+    live = edited(session, us, target.role).received.live
+    cleared = [i for i, r in enumerate(live) if r.clear_count]
+    assert len(cleared) == 2
+    before = all_bytes(session)
+    session.reset_clears_many(target, [0, *cleared])
+    assert all(r.clear_count == 0 for r in edited(session, us, target.role).received.live)
+    assert session.undo() == "Reset clear counts of 2 tablets in the quick save"
+    assert all_bytes(session) == before
+    with pytest.raises(SessionError, match="None of those tablets have been cleared."):
+        session.reset_clears_many(target, [0, 1])
+    with pytest.raises(SessionError, match="That tablet has not been cleared."):
+        session.reset_clears_many(target, [0])
+    assert not session.can_undo
