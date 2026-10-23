@@ -11,6 +11,7 @@ from pathlib import Path
 
 from dq7tt.apppaths import AppPaths
 from dq7tt.errors import (
+    AzaharReplaceError,
     OutputExistsError,
     SaveIOError,
     SessionError,
@@ -128,11 +129,13 @@ def write_source(
     now: datetime,
     protect: Sequence[Path] = (),
     out_dir: Path | None = None,
+    backup: bool = True,
 ) -> Path:
     """Back the source up, then write the edited copy to `out_dir` or `output_path`.
 
     The destination is checked before the backup, so a refused destination leaves nothing behind.
-    The input is never touched.
+    The input is never touched. `backup=False` skips the backup, for a copy that is put into
+    Azahar straight away (that step backs Azahar up itself).
     """
     if out_dir is not None and source.kind is SourceKind.FILE:
         raise SessionError("A single save file is written next to itself, not to a chosen folder.")
@@ -143,7 +146,8 @@ def write_source(
     else:
         protect = [*protected_dirs(source)[1:], *protect]
         check_destination([source.save_dir, *protect], out)
-    backup_source(source, paths, now)
+    if backup:
+        backup_source(source, paths, now)
     if source.kind is SourceKind.FILE:
         _write_file_source(source, edited, out)
     else:
@@ -205,19 +209,78 @@ def put_into_azahar(
     if missing:
         raise SessionError(f"The Azahar folder has no {', '.join(missing)} to replace.")
     zip_path = backup_source(source, paths, now)
-    for name in names:
-        target = target_dir / name
-        temp = target.with_name(target.name + TEMP_SUFFIX)
+    _replace_all(edited_dir, target_dir, names, zip_path)
+    return zip_path
+
+
+def _discard(temps: Sequence[Path]) -> None:
+    for temp in temps:
+        try:
+            temp.unlink(missing_ok=True)
+        except OSError as exc:
+            log.warning("could not remove %s: %s", temp, exc)
+
+
+def _replace_all(edited_dir: Path, target_dir: Path, names: Sequence[str], zip_path: Path) -> None:
+    """Replace every named save in `target_dir`, or leave it as it was.
+
+    Every edited save is copied in beside its target first, so a full or read-only folder fails
+    before anything is replaced. Then each copy is renamed over its target; if one rename fails,
+    the saves already replaced are put back from the backup.
+    """
+    temps = [(target_dir / name).with_name(name + TEMP_SUFFIX) for name in names]
+    for name, temp in zip(names, temps, strict=True):
         try:
             shutil.copyfile(edited_dir / name, temp)
-            os.replace(temp, target)
         except OSError as exc:
-            temp.unlink(missing_ok=True)
-            raise SaveIOError(
-                f"Could not replace {name} in Azahar: {exc.strerror or exc}. "
-                f"Your original saves are in the backup {zip_path}."
+            _discard(temps)
+            raise AzaharReplaceError(
+                f"Could not copy {name} into Azahar: {exc.strerror or exc}. "
+                f"Nothing in Azahar was changed. A backup is in {zip_path}.",
+                zip_path,
+                restored=True,
             ) from exc
-    return zip_path
+    replaced: list[str] = []
+    for name, temp in zip(names, temps, strict=True):
+        try:
+            os.replace(temp, target_dir / name)
+        except OSError as exc:
+            _discard(temps)
+            restored = _restore_from_backup(zip_path, target_dir, replaced)
+            outcome = (
+                "Azahar's save was put back as it was."
+                if restored
+                else f"Azahar's save could not be put back. Restore it from the backup {zip_path}."
+            )
+            raise AzaharReplaceError(
+                f"Could not replace {name} in Azahar: {exc.strerror or exc}. {outcome}",
+                zip_path,
+                restored=restored,
+            ) from exc
+        replaced.append(name)
+
+
+def _restore_from_backup(zip_path: Path, target_dir: Path, names: Sequence[str]) -> bool:
+    """Put the named saves back from the backup zip; False if any could not be."""
+    try:
+        archive = zipfile.ZipFile(zip_path)
+    except (OSError, zipfile.BadZipFile) as exc:
+        log.error("could not open the backup %s to put saves back: %s", zip_path, exc)
+        return False
+    with archive:
+        for name in names:
+            target = target_dir / name
+            temp = target.with_name(name + TEMP_SUFFIX)
+            try:
+                temp.write_bytes(archive.read(name))
+                os.replace(temp, target)
+            except (OSError, KeyError, zipfile.BadZipFile) as exc:
+                log.error("could not put %s back from %s: %s", name, zip_path, exc)
+                _discard([temp])
+                return False
+    if names:
+        log.warning("put %s back from %s after a failed copy", ", ".join(names), zip_path)
+    return True
 
 
 def clean_stale_staging(

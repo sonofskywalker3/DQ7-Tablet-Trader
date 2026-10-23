@@ -21,7 +21,7 @@ import dq7tt.session_core as session_module
 from dq7tt.apppaths import AppPaths
 from dq7tt.constants import CHECKSUM_OFFSET, SAVE_FILENAMES
 from dq7tt.database import TabletDatabase
-from dq7tt.errors import SaveIOError, SessionError, ValidationError
+from dq7tt.errors import AzaharRereadError, SaveIOError, SessionError, ValidationError
 from dq7tt.savefile import SlotRole
 from dq7tt.session import Target
 from dq7tt.validate import Severity
@@ -274,3 +274,24 @@ def test_write_after_undoing_past_a_write_matches_the_state(tmp_path: Path) -> N
     assert session.is_dirty(one)
     out = session.write(one)
     assert tree_bytes(out) == before
+
+
+def test_put_into_azahar_that_cannot_be_read_back_says_the_edit_is_in(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session = new_session(tmp_path)
+    azahar = fill(tmp_path / AZAHAR_PATH)
+    sid = session.open(azahar)
+    session.add_from_database(Target(sid, SlotRole.LOG_3), ODDNA)
+    expected = edited(session, sid, SlotRole.LOG_3).to_bytes()
+    session.write(sid)
+
+    def unreadable(_source: object) -> None:
+        raise SaveIOError("Could not read Azahar: busy")
+
+    monkeypatch.setattr(session_module, "load_saves", unreadable)
+    with pytest.raises(AzaharRereadError) as caught:
+        session.put_into_azahar(sid, sid)
+    assert (azahar / SAVE_FILENAMES[3]).read_bytes() == expected
+    assert caught.value.backup.is_file()
+    assert not session.is_dirty(sid)

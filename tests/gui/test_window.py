@@ -13,7 +13,7 @@ from dq7tt_gui.viewmodels import Confirm, Notice, NoticeKind, PaneSide
 from dq7tt_gui.window import APP_TITLE, EMPTY_TEXT, Window
 
 WIDE = 1280.0
-NARROW = 600.0
+NARROW = 500.0  # below the compact layout's 600
 TALL = 700.0
 
 
@@ -25,13 +25,29 @@ class FakeWindow:
         return None
 
 
+class FakeView:
+    """The page's root view: whether Android's Back may leave, and the answers given."""
+
+    def __init__(self) -> None:
+        self.can_pop = True
+        self.on_confirm_pop: Callable[..., object] | None = None
+        self.answers: list[bool] = []
+
+    async def confirm_pop(self, should_pop: bool) -> None:
+        self.answers.append(should_pop)
+
+
 class FakePage:
     """The few page attributes the window touches; records dialogs instead of showing them."""
 
     def __init__(self, width: float | None = WIDE) -> None:
         self.title = ""
         self.width = width
+        self.height: float | None = None
         self.window = FakeWindow()
+        self.views = [FakeView()]
+        self.platform: ft.PagePlatform | None = None
+        self.controls: list[ft.Control] = []
         self.on_keyboard_event: Callable[..., object] | None = None
         self.on_resize: Callable[..., object] | None = None
         self.services: list[object] = []
@@ -58,6 +74,7 @@ class FakePage:
 
     def add(self, *controls: ft.Control) -> None:
         self.added.extend(controls)
+        self.controls.extend(controls)
 
     def update(self) -> None:
         self.updates += 1

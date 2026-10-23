@@ -41,23 +41,34 @@ def feedback(row: TabletRow, count: int) -> ft.Control:
     )
 
 
-def draggable(content: ft.Control, row: TabletRow, payload: DragPayload) -> ft.Draggable:
-    """Wrap a row's name area so it can be dragged to the other pane."""
+def draggable(
+    content: ft.Control, row: TabletRow, payload: DragPayload, touch: bool = False
+) -> ft.Draggable:
+    """Wrap a row's name area so it can be dragged to the other pane.
+
+    On a touch screen the drag only starts on a sideways move (towards the other pane), so
+    a swipe up or down still scrolls the list. Flet 1.0.4 has no long-press Draggable; the
+    long press is left to the list, where it reorders.
+    """
     return ft.Draggable(
         content=content,
         group=GROUP,
         data=payload,
         content_feedback=feedback(row, len(payload.indexes)),
+        affinity=ft.Axis.HORIZONTAL if touch else None,
     )
 
 
-def drop_index(y: float, count: int, scroll: float = 0.0) -> int:
+def drop_index(
+    y: float, count: int, scroll: float = 0.0, row_height: float = theme.ROW_HEIGHT
+) -> int:
     """The gap a drop lands in: before the row under the dragged tablet's centre.
 
     `y` is the feedback's top-left, relative to the visible list; `scroll` is how far the list
-    is scrolled. Below the last row it is the end of the list.
+    is scrolled; `row_height` is the list's own (taller on Android). Below the last row it is
+    the end of the list.
     """
-    row = math.floor((y + scroll + theme.ROW_HEIGHT / 2) / theme.ROW_HEIGHT)
+    row = math.floor((y + scroll + row_height / 2) / row_height)
     return min(max(row, 0), count)
 
 

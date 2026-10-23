@@ -4,7 +4,7 @@ import flet as ft
 
 from dq7tt.savefile import SlotRole
 from dq7tt.tablets import TabletKind
-from dq7tt_gui import art, theme, widgets, widgets_bars
+from dq7tt_gui import art, theme, widgets, widgets_bars, widgets_chips
 from dq7tt_gui.viewmodels import (
     ActionBar,
     FolderChip,
@@ -135,7 +135,7 @@ def test_row_tells_the_pane_when_the_mouse_comes_and_goes() -> None:
 
 
 def test_pane_floats_its_pointer_beside_the_row_under_the_mouse(monkeypatch) -> None:
-    from dq7tt_gui.widgets_pane import POINTER_TOP, PaneShell
+    from dq7tt_gui.widgets_pane import PaneShell
 
     shell = PaneShell()
     view = pane_view(rows=(row(), TabletRow(4, "Mount Oddna", TabletKind.DLC, 0, False, "left:4")))
@@ -144,7 +144,10 @@ def test_pane_floats_its_pointer_beside_the_row_under_the_mouse(monkeypatch) -> 
     items = shell.list_control().controls  # type: ignore[union-attr]
     second = items[1].content  # the row inside its keyed holder
     hover(second, True)
-    assert shell.pointer.visible and shell.pointer.top == 4 * theme.ROW_HEIGHT + POINTER_TOP
+    assert (
+        shell.pointer.visible
+        and shell.pointer.top == 4 * theme.ROW_HEIGHT + (theme.ROW_HEIGHT - theme.POINTER_H) / 2
+    )
     hover(items[0].content, False)  # leaving another row does not hide it
     assert shell.pointer.visible
     hover(second, False)
@@ -182,8 +185,8 @@ def test_log_chip_marks_active_and_picks() -> None:
     picked: list[SlotRole] = []
     chip = LogChip(SlotRole.LOG_1, "Log 1", "Auster, 135h", True, False, "24/24")
     other = LogChip(SlotRole.LOG_2, "Log 2", "Auster, 135h", False, False, "23/24")
-    on = widgets.log_chip(chip, picked.append)
-    off = widgets.log_chip(other, picked.append)
+    on = widgets_chips.log_chip(chip, picked.append)
+    off = widgets_chips.log_chip(other, picked.append)
     assert on.bgcolor == theme.GOLD_WASH and on.border.top.color == theme.GOLD
     assert off.bgcolor == theme.CHIP and off.border.top.color == theme.CHIP_BORDER
     assert texts(on) == ["Log 1", "24/24", "Auster, 135h"]
@@ -194,15 +197,15 @@ def test_log_chip_marks_active_and_picks() -> None:
 
 def test_muted_quick_save_chip_is_dim() -> None:
     chip = LogChip(SlotRole.QUICK_SAVE, "Quick save", "", False, True)
-    ctl = widgets.log_chip(chip, lambda r: None)
+    ctl = widgets_chips.log_chip(chip, lambda r: None)
     assert ctl.bgcolor is None
     assert all(c.color == theme.DIM for c in walk(ctl) if isinstance(c, ft.Text))
 
 
 def test_folder_chip_active_and_count() -> None:
     picked: list[str] = []
-    on = widgets.folder_chip(FolderChip("haven", "Haven DLC", 20, True), picked.append)
-    off = widgets.folder_chip(FolderChip("story", "Story", 3, False), picked.append)
+    on = widgets_chips.folder_chip(FolderChip("haven", "Haven DLC", 20, True), picked.append)
+    off = widgets_chips.folder_chip(FolderChip("story", "Story", 3, False), picked.append)
     assert on.bgcolor == theme.GOLD_WASH
     assert off.bgcolor == theme.CHIP
     assert on.alignment is None  # folder chips are as wide as their names
@@ -361,7 +364,7 @@ def test_long_undo_label_is_capped_with_tooltip() -> None:
 
 
 def test_folder_chip_is_touch_height_and_handle_has_tooltip() -> None:
-    chip = widgets.folder_chip(FolderChip("a", "A", 1, False), lambda n: None)
+    chip = widgets_chips.folder_chip(FolderChip("a", "A", 1, False), lambda n: None)
     assert chip.height >= 40
     view = pane_view(PaneSide.RIGHT)
     ctl = pane(view, callbacks([]), RightMode.SAVE)

@@ -7,8 +7,10 @@ import pytest
 from dq7tt import apppaths
 from dq7tt.apppaths import (
     APP_NAME,
+    SHARED_FOLDER,
     AppPaths,
     Settings,
+    android_shared_dir,
     effective_bank_dir,
     load_settings,
     save_settings,
@@ -97,3 +99,45 @@ def test_binary_settings_returns_defaults(tmp_path: Path) -> None:
     p.data_dir.mkdir(parents=True)
     (p.data_dir / "settings.json").write_bytes(b"\xff\xfe\x00")
     assert load_settings(p) == Settings()
+
+
+def test_for_android_splits_private_and_shared(tmp_path: Path) -> None:
+    private, shared = tmp_path / "private", tmp_path / "shared"
+    p = AppPaths.for_android(private, shared)
+    assert p.data_dir == private
+    assert p.work_dir == private / "work"
+    assert p.bank_dir == shared / "bank"
+    assert p.backups_dir == shared / "backups"
+    assert p.edited_dir == shared / "edited"
+
+
+def test_android_shared_dir_uses_external_storage() -> None:
+    got = android_shared_dir({"EXTERNAL_STORAGE": "/mnt/sd"})
+    assert got == Path("/mnt/sd") / SHARED_FOLDER
+
+
+def test_android_shared_dir_default() -> None:
+    assert android_shared_dir({}) == Path("/storage/emulated/0") / SHARED_FOLDER
+
+
+def test_settings_round_trip_azahar_dir(tmp_path: Path) -> None:
+    p = AppPaths.under(tmp_path)
+    save_settings(p, Settings(azahar_dir=tmp_path / "Azahar"))
+    assert load_settings(p).azahar_dir == tmp_path / "Azahar"
+
+
+def test_settings_without_azahar_dir_loads(tmp_path: Path) -> None:
+    p = AppPaths.under(tmp_path)
+    p.data_dir.mkdir(parents=True)
+    (p.data_dir / "settings.json").write_text('{"bank_dir": null, "last_sources": []}')
+    assert load_settings(p).azahar_dir is None
+
+
+def test_android_storage_and_private_dir() -> None:
+    from dq7tt.apppaths import android_private_dir, android_storage
+
+    assert android_storage({"EXTERNAL_STORAGE": "/mnt/sd"}) == Path("/mnt/sd")
+    assert android_storage({}) == Path("/storage/emulated/0")
+    flet_data = {"FLET_APP_STORAGE_DATA": "/data/user/0/app/files/data"}
+    assert android_private_dir(flet_data) == Path("/data/user/0/app/files/data")
+    assert android_private_dir({}).name == "DQ7 Tablet Trader"

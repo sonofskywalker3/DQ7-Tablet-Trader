@@ -1,14 +1,22 @@
-"""The main window: toolbar, two panes (or Save/Bank tabs when narrow), action bar, keys."""
+"""The main window: toolbar, two panes (or Save/Bank tabs when narrow), action bar, keys.
+
+Three layouts (see `layout.py`): WIDE with the engraved bands, COMPACT for short screens
+such as the AYN Thor's top screen, and TABS for narrow ones.
+"""
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from pathlib import Path
 
 import flet as ft
 
 from dq7tt.savefile import SlotRole
-from dq7tt_gui import art, theme
+from dq7tt_gui import theme
+from dq7tt_gui.controller import BackGuard, KeyNames
+from dq7tt_gui.device_profile import DESKTOP_PROFILE, Platform
+from dq7tt_gui.layout import SHORT_HEIGHT, Layout, choose_layout, roomy
 from dq7tt_gui.model import AppModel
-from dq7tt_gui.model_text import DISCARD_TITLE
+from dq7tt_gui.model_text import DISCARD_TITLE, EMPTY_FORMAT
 from dq7tt_gui.viewmodels import (
     Confirm,
     Notice,
@@ -16,72 +24,106 @@ from dq7tt_gui.viewmodels import (
     PaneSide,
     RightMode,
 )
-from dq7tt_gui.widgets import bar_button, text
 from dq7tt_gui.widgets_bars import ActionCallbacks, ToolbarCallbacks, action_bar, toolbar
 from dq7tt_gui.widgets_drag import DragPayload, final_position
-from dq7tt_gui.widgets_frame import band, ground, menu_window
-from dq7tt_gui.widgets_pane import PaneCallbacks, PaneShell
+from dq7tt_gui.widgets_frame import band, ground
+from dq7tt_gui.widgets_pane import PaneCallbacks, PaneShell, empty_window
+from dq7tt_gui.window_compact import KEY_MARKS
+from dq7tt_gui.window_controller import ControllerFlows
 from dq7tt_gui.window_dialogs import TAB_SAVE
-from dq7tt_gui.window_narrow import BAR_SPACING, NarrowLayout
+from dq7tt_gui.window_narrow import NarrowLayout
+from dq7tt_gui.window_short import ShortTabsLayout
 
 log = logging.getLogger(__name__)
 
 APP_TITLE = "DQ7 Tablet Trader"
 UNWRITTEN_MARK = " *"
-EMPTY_TEXT = "Open a save or find saves on this PC"
+# The desktop wording; the window shows the model's own, which names the device.
+EMPTY_TEXT = EMPTY_FORMAT.format(device=DESKTOP_PROFILE.device_word)
 CLOSE_TEXT = "You have changes that are not written yet. Close anyway and lose them?"
 KEY_UNDO, KEY_REDO, KEY_WRITE, KEY_ALL, KEY_ESCAPE = "Z", "Y", "S", "A", "ESCAPE"
 FRAME_TOP = 10
-EMPTY_COMPASS = 160
-EMPTY_SPACING = 16
 
 
-class Window(NarrowLayout):
+class Window(ShortTabsLayout, NarrowLayout, ControllerFlows):
     def __init__(self, page: ft.Page, model: AppModel) -> None:
         self.page = page
         self.model = model
         self.active_side = PaneSide.LEFT
         self.pending_confirm: Confirm | None = None
-        self.narrow = self._width() < theme.NARROW_WIDTH
+        # A finger, not a mouse: taller rows, long press to reorder, clear of the status bar.
+        self.touch = model.profile.platform is Platform.ANDROID
+        self._shown_width, self._shown_height = self._width(), self._height()
+        self.layout = choose_layout(self._shown_width, self._shown_height)
         self.tab_index = TAB_SAVE
         self.picker: ft.FilePicker | None = None
         self._mounted = False
         self._queue: list[Confirm] = []
         self._dialogs: list[ft.AlertDialog] = []
+        self._cancels: dict[int, Callable[[object], object]] = {}
         self._close_question: Confirm | None = None
+        self._back_guard = BackGuard()
+        self._key_names = KeyNames()
+        self._leaving: Confirm | None = None
         self._scan_id = 0
         self._searching: ft.AlertDialog | None = None
         self._top = ft.Container()
         self._body = ft.Container(expand=True)
         self._bottom = ft.Container()
-        self._shells = {PaneSide.LEFT: PaneShell(), PaneSide.RIGHT: PaneShell()}
+        row_height = theme.ANDROID_ROW_HEIGHT if self.touch else theme.ROW_HEIGHT
+        self._shells = {side: PaneShell(row_height, self.touch) for side in PaneSide}
+        self._bands = (band(top=True), band(top=False))
         self._panes = ft.Row(spacing=theme.PANE_GAP)
         self._wide = ft.Container(content=self._panes, expand=True)
+        self._single = ft.Container(expand=True)  # the one pane of the short tabs
         self._layout = ft.Column(
             [self._top, self._body, self._bottom],
             expand=True,
             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
         )
         self._frame = ft.Container(content=self._layout, expand=True)
+        self.root: ft.Control | None = None
         self._build_tabs()
 
     # Building
 
+    @property
+    def narrow(self) -> bool:
+        """One pane at a time, in tabs."""
+        return self.layout is Layout.TABS
+
+    @property
+    def slim(self) -> bool:
+        """Slim strips and slim panes, no bands: the compact layout, and tabs on a short
+        screen (the Thor's bottom screen)."""
+        short_tabs = self.narrow and self._shown_height < SHORT_HEIGHT
+        return self.layout is Layout.COMPACT or short_tabs
+
     def build(self) -> ft.Control:
-        """Parchment with an engraved band along the top and bottom, the windows between."""
+        """Parchment with an engraved band along the top and bottom, the windows between.
+
+        The compact layout hides the bands. On a touch screen everything keeps clear of the
+        status bar.
+        """
         self._fill()
-        return ground(
-            ft.Column(
-                [band(top=True), self._frame, band(top=False)],
-                spacing=0,
-                expand=True,
-                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
-            )
+        column = ft.Column(
+            [self._bands[0], self._frame, self._bands[1]],
+            spacing=0,
+            expand=True,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
         )
+        return ground(ft.SafeArea(content=column, expand=True) if self.touch else column)
 
     def _width(self) -> float:
         """The page width; Flet reports none until the first resize event."""
         return self.page.width or theme.WINDOW_W
+
+    def _height(self) -> float:
+        return self.page.height or theme.WINDOW_H
+
+    def shown_width(self) -> float:
+        """The width the window was last laid out for."""
+        return self._shown_width
 
     def install(self) -> None:
         """Hook the window to its page: title, keys, resizing, close."""
@@ -89,10 +131,32 @@ class Window(NarrowLayout):
         self.page.on_resize = self.on_resize
         self.page.window.prevent_close = True
         self.page.window.on_event = self.on_window_event
-        self.narrow = self._width() < theme.NARROW_WIDTH
-        self.page.add(self.build())
+        self.hold_back()
+        self._shown_width, self._shown_height = self._width(), self._height()
+        self.layout = choose_layout(self._shown_width, self._shown_height)
+        self.root = self.build()
+        self.page.add(self.root)
         self._mounted = True
         self.refresh()
+
+    def show(self, start: Path | None = None) -> None:
+        """Put the window on the page in place of whatever is there (Android's setup screen).
+
+        `start` opens on the left unless a save is open there already, as it is when the
+        window comes back after access was turned off and on again.
+        """
+        if self.root is None:
+            self.page.controls.clear()
+            self.install()
+        else:
+            self.page.controls[:] = [self.root]
+            self.page.on_keyboard_event = self.on_key
+            self.page.on_resize = self.on_resize
+            self.apply_size(self._width(), self._height())
+        if start is not None and not self.model.has_save(PaneSide.LEFT):
+            self._open_path(start)
+        else:
+            self.refresh()
 
     def refresh(self) -> None:
         """Rebuild toolbar, panes and action bar from the model."""
@@ -103,28 +167,51 @@ class Window(NarrowLayout):
             self.page.update()
 
     def apply_width(self, width: float) -> None:
-        narrow = width < theme.NARROW_WIDTH
-        if narrow != self.narrow:
-            self.narrow = narrow
+        self.apply_size(width, self._height())
+
+    def apply_size(self, width: float, height: float) -> None:
+        """Take the layout for this size; redraw when it, or the compact strips' room, changes."""
+        before = (self.layout, roomy(self._shown_width), self.slim)
+        self.layout = choose_layout(width, height)
+        self._shown_width, self._shown_height = width, height
+        if (self.layout, roomy(width), self.slim) != before:
             self.refresh()
 
     def on_resize(self, e: ft.PageResizeEvent) -> None:
-        self.apply_width(e.width)
+        self.apply_size(e.width, e.height)
 
     def _fill(self) -> None:
         tb = self.model.toolbar()
-        margin = theme.FRAME_MARGIN_NARROW if self.narrow else theme.FRAME_MARGIN
-        self._frame.padding = ft.Padding(left=margin, top=FRAME_TOP, right=margin, bottom=FRAME_TOP)
-        self._layout.spacing = theme.FRAME_GAP_NARROW if self.narrow else theme.FRAME_GAP
+        self._frame_spacing()
+        for b in self._bands:
+            b.visible = not self.slim
+        if self.narrow and self.slim:
+            self._fill_short_tabs()
+            return
         if self.narrow:
             self._top.content = self._narrow_top(tb.undo_label is not None)
             self._show_layout(self._tabs())
             self._bottom.content = self._narrow_bar()
             return
-        self._top.content = toolbar(tb, self._toolbar_callbacks())
+        compact = self.layout is Layout.COMPACT
+        self._panes.spacing = theme.COMPACT_GAP if compact else theme.PANE_GAP
         self._panes.controls = [self._pane(PaneSide.LEFT), self._pane(PaneSide.RIGHT)]
         self._show_layout(self._wide)
+        if compact:
+            self._top.content = self._compact_top()
+            self._bottom.content = self._compact_bottom()
+            return
+        self._top.content = toolbar(tb, self._toolbar_callbacks())
         self._bottom.content = action_bar(self.model.action_bar(), self._action_callbacks())
+
+    def _frame_spacing(self) -> None:
+        if self.slim:
+            self._frame.padding = ft.Padding.all(theme.COMPACT_GAP)
+            self._layout.spacing = theme.COMPACT_GAP
+            return
+        margin = theme.FRAME_MARGIN_NARROW if self.narrow else theme.FRAME_MARGIN
+        self._frame.padding = ft.Padding(left=margin, top=FRAME_TOP, right=margin, bottom=FRAME_TOP)
+        self._layout.spacing = theme.FRAME_GAP_NARROW if self.narrow else theme.FRAME_GAP
 
     def _show_layout(self, layout: ft.Control) -> None:
         """Put `layout` in the body. Left as is on later redraws so the lists keep their scroll.
@@ -144,29 +231,19 @@ class Window(NarrowLayout):
             self._shells[side].reset()
             return self._empty_state()
         mode = self.model.right_mode()
-        return self._shells[side].update(view, self._pane_callbacks(side), mode, self.narrow)
+        both = self.layout is Layout.COMPACT
+        return self._shells[side].update(
+            view,
+            self._pane_callbacks(side),
+            mode,
+            self.narrow,
+            compact=self.slim,
+            active=both and side is self.active_side,
+            key=KEY_MARKS[side] if both and self.touch else None,
+        )
 
     def _empty_state(self) -> ft.Control:
-        buttons = ft.Row(
-            [bar_button("Open save", self.open_dialog), bar_button("Find saves", self.find_saves)],
-            alignment=ft.MainAxisAlignment.CENTER,
-            wrap=True,
-            spacing=BAR_SPACING,
-            run_spacing=BAR_SPACING,
-        )
-        return menu_window(
-            ft.Column(
-                [
-                    ft.Image(src=art.COMPASS_FAINT, width=EMPTY_COMPASS, height=EMPTY_COMPASS),
-                    text(EMPTY_TEXT, color=theme.MUTED, size=theme.TITLE_SIZE),
-                    buttons,
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                alignment=ft.MainAxisAlignment.CENTER,
-                spacing=EMPTY_SPACING,
-            ),
-            expand=True,
-        )
+        return empty_window(self.model.empty_text(), self.open_dialog, self.find_saves, self.slim)
 
     # Callback bundles
 
@@ -203,9 +280,14 @@ class Window(NarrowLayout):
             on_drop=lambda payload, gap: self._drop(payload, side, gap),
             on_bank_all=lambda: self.handle(self.model.import_all_to_bank(side)),
             on_put_into_azahar=lambda: self.handle(self.model.put_into_azahar(side)),
+            on_activate=lambda: self.head_tapped(side),
         )
 
     def _drop(self, payload: DragPayload, dest: PaneSide, gap: int) -> None:
+        if self.touch and payload.side is dest:
+            # A sideways flick that ends on its own pane; on a touch screen a long press
+            # reorders, so this is not taken as a move.
+            return
         index = final_position(payload, dest, gap)
         self.handle(self.model.drop(payload.side, payload.indexes, dest, index))
 
@@ -231,7 +313,7 @@ class Window(NarrowLayout):
         self.handle(self.model.redo())
 
     def write_all(self) -> None:
-        self._write(self.model.dirty_sides())
+        self._write(self.model.write_sides())
 
     def _write(self, sides: Sequence[PaneSide]) -> None:
         notices: list[Notice] = []
@@ -264,7 +346,7 @@ class Window(NarrowLayout):
     # Keyboard and closing
 
     def on_key(self, e: ft.KeyboardEvent) -> None:
-        if self._dialogs:
+        if self.pad_key(e.key) or self._dialogs:
             return
         key = e.key.upper()
         if key == KEY_ESCAPE:
@@ -277,7 +359,7 @@ class Window(NarrowLayout):
             self.redo()
         elif key == KEY_ALL:
             self.handle(self.model.select_all(self.active_side))
-        elif key == KEY_WRITE and self.model.dirty_sides():
+        elif key == KEY_WRITE and self.model.write_sides():
             self.write_all()  # the same as the Write button
 
     async def on_window_event(self, e: ft.WindowEvent) -> None:

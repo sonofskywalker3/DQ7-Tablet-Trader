@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,7 +21,13 @@ BACKUPS_FOLDER = "backups"
 WORK_FOLDER = "work"
 EDITED_FOLDER = "edited"
 UNDER_DATA_FOLDER = "data"
+SHARED_FOLDER = "DQ7 Tablet Trader"
+EXTERNAL_STORAGE_VAR = "EXTERNAL_STORAGE"
+DEFAULT_EXTERNAL_STORAGE = "/storage/emulated/0"
+# The app's private storage on a phone or handheld, set by the Flet app before Python starts.
+FLET_DATA_VAR = "FLET_APP_STORAGE_DATA"
 KEY_BANK_DIR = "bank_dir"
+KEY_AZAHAR_DIR = "azahar_dir"
 KEY_LAST_SOURCES = "last_sources"
 JSON_INDENT = 2
 
@@ -55,10 +62,38 @@ class AppPaths:
     def under(cls, root: Path) -> "AppPaths":
         return cls._build(root / UNDER_DATA_FOLDER, root / EDITED_FOLDER)
 
+    @classmethod
+    def for_android(cls, private_dir: Path, shared_dir: Path) -> "AppPaths":
+        """Settings, logs and work stay private; bank, backups and edited copies are visible."""
+        return cls(
+            data_dir=private_dir,
+            bank_dir=shared_dir / BANK_FOLDER,
+            backups_dir=shared_dir / BACKUPS_FOLDER,
+            edited_dir=shared_dir / EDITED_FOLDER,
+            work_dir=private_dir / WORK_FOLDER,
+        )
+
+
+def android_storage(env: Mapping[str, str] = os.environ) -> Path:
+    """Internal storage: the top folder a file manager shows."""
+    return Path(env.get(EXTERNAL_STORAGE_VAR) or DEFAULT_EXTERNAL_STORAGE)
+
+
+def android_shared_dir(env: Mapping[str, str] = os.environ) -> Path:
+    """The visible app folder on internal storage."""
+    return android_storage(env) / SHARED_FOLDER
+
+
+def android_private_dir(env: Mapping[str, str] = os.environ) -> Path:
+    """The app's private folder: Flet's app storage, else the usual user data folder."""
+    flet_data = env.get(FLET_DATA_VAR)
+    return Path(flet_data) if flet_data else platformdirs.user_data_path(APP_NAME, appauthor=False)
+
 
 @dataclass
 class Settings:
     bank_dir: Path | None = None
+    azahar_dir: Path | None = None
     last_sources: list[Path] = field(default_factory=list)
 
 
@@ -79,11 +114,17 @@ def load_settings(paths: AppPaths) -> Settings:
     try:
         data = json.loads(raw)
         bank = data.get(KEY_BANK_DIR)
+        azahar = data.get(KEY_AZAHAR_DIR)
         sources = data.get(KEY_LAST_SOURCES, [])
-        if (bank is not None and not isinstance(bank, str)) or not isinstance(sources, list):
+        if (
+            (bank is not None and not isinstance(bank, str))
+            or (azahar is not None and not isinstance(azahar, str))
+            or not isinstance(sources, list)
+        ):
             raise TypeError("unexpected settings shape")
         return Settings(
             bank_dir=Path(bank) if bank else None,
+            azahar_dir=Path(azahar) if azahar else None,
             last_sources=[Path(s) for s in sources],
         )
     except (ValueError, TypeError, AttributeError) as exc:
@@ -96,6 +137,7 @@ def save_settings(paths: AppPaths, settings: Settings) -> None:
     file = _settings_file(paths)
     payload = {
         KEY_BANK_DIR: str(settings.bank_dir) if settings.bank_dir else None,
+        KEY_AZAHAR_DIR: str(settings.azahar_dir) if settings.azahar_dir else None,
         KEY_LAST_SOURCES: [str(p) for p in settings.last_sources],
     }
     tmp_name: str | None = None

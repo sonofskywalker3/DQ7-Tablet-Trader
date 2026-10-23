@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added: an Android app, made for the AYN Thor's top screen (save on the left, bank on the right; save and bank tabs on smaller screens). Installed from an APK file, not Google Play. At first start it asks for access to your saves and for your Azahar folder, then opens your save. Save into Azahar is one step on Android: it backs up Azahar's save first and puts it back if writing fails. Touch: tap to tick, swipe to scroll, drag sideways to copy, long-press to reorder. Controller: D-pad and A to move and tick, B to close a question or clear ticks (never leaves the app), L and R to switch sides, Y to tick all, Start to save. The bank, backups and edited copies live in a "DQ7 Tablet Trader" folder in internal storage. Opening a single save file or a zip is not offered on Android.
+- Added: an app icon for Android, a carved story stone in a gold compass ring.
 - Fixed: numbers in the window read as numbers. The text font now draws lining figures, so a 0 no longer looks like an "o" or a 1 like an "I".
 - Changed: the window looks like an adventure log. Parchment with engraved bands, dark menu windows with a thin white edge, serif text, a gold pointer for where you are and a gold wash on ticked tablets. Each tablet shows a carved stone for its kind. Copy to and Move to say how full each log is. Fonts: Sorts Mill Goudy and Cinzel (SIL Open Font License).
 - Added: a desktop window for Windows. Open or find saves, copy and move tablets between logs, keep a bank, write edited copies (never the original), and put an edited save into Azahar. Packaged as a single exe built with `tools/build_windows.py`; a log file is kept in the app data folder.

@@ -315,6 +315,7 @@ def test_write_jksm_and_plain_folder(tmp_path: Path) -> None:
         model.toggle_row(side, 0)
         model.remove_selected()
     assert model.toolbar().write_label == "Write changes to both saves"
+    assert model.toolbar().short_label == "Write both"
     assert model.dirty_sides() == [LEFT, RIGHT]
     existing = set(jksm.parent.iterdir())
     result = notices(model.write(LEFT))

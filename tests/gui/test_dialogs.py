@@ -3,7 +3,7 @@ from pathlib import Path
 import flet as ft
 from test_widgets import button_labels, buttons, label, noop, texts, walk
 
-from dq7tt_gui import art, theme
+from dq7tt_gui import art, dialogs, theme
 from dq7tt_gui.dialogs import (
     LIST_MAX_HEIGHT,
     NO_SAVES_TEXT,
@@ -234,3 +234,13 @@ def test_notices_float_in_a_small_window() -> None:
     assert bar.shape.side.color == theme.WINDOW_EDGE  # type: ignore[union-attr]
     error = snack(Notice(NoticeKind.ERROR, "No."))
     assert error.shape.side.color == theme.DANGER_BORDER  # type: ignore[union-attr]
+
+
+def test_long_choice_list_scrolls_at_the_height_given() -> None:
+    options = [(f"Option {i}", lambda: None) for i in range(5)]
+    tall = dialogs.choice_dialog("Pick", options, lambda: None)
+    assert not isinstance(tall.content.content, ft.Container)  # type: ignore[union-attr]
+    short = dialogs.choice_dialog("Pick", options, lambda: None, max_height=120)
+    body = short.content.content  # type: ignore[union-attr]
+    assert isinstance(body, ft.Container) and body.height == 120
+    assert body.content.scroll == ft.ScrollMode.AUTO  # type: ignore[union-attr]

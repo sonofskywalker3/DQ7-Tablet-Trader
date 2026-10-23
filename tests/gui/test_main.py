@@ -66,3 +66,41 @@ def test_start_failure_text_blames_nothing_in_particular() -> None:
     assert "tablets" not in message
     assert "download" in message.lower()
     assert "\N{EM DASH}" not in message
+
+
+def test_android_paths_keep_settings_private_and_the_bank_visible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(gui_main.APP_DIR_ENV, raising=False)
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path / "private"))
+    monkeypatch.setenv("EXTERNAL_STORAGE", str(tmp_path / "storage"))
+    paths = gui_main.app_paths(android=True)
+    assert paths == AppPaths.for_android(
+        tmp_path / "private", tmp_path / "storage" / "DQ7 Tablet Trader"
+    )
+
+
+def test_profile_follows_the_page_platform() -> None:
+    from dq7tt_gui.device_profile import ANDROID_PROFILE, DESKTOP_PROFILE
+
+    assert gui_main.on_android(ft.PagePlatform.ANDROID)
+    assert not gui_main.on_android(ft.PagePlatform.WINDOWS)
+    assert not gui_main.on_android(None)
+    assert gui_main.profile_for(True) is ANDROID_PROFILE
+    assert gui_main.profile_for(False) is DESKTOP_PROFILE
+
+
+@pytest.mark.parametrize(("android", "level"), [(False, logging.NOTSET), (True, logging.DEBUG)])
+def test_key_names_are_written_only_on_android(tmp_path: Path, android: bool, level: int) -> None:
+    keys = logging.getLogger("dq7tt_gui.controller")
+    root = logging.getLogger()
+    handlers, before = list(root.handlers), keys.level
+    keys.setLevel(logging.NOTSET)
+    try:
+        gui_main.setup_logging(AppPaths.under(tmp_path), android=android)
+        assert keys.level == level
+    finally:
+        for handler in root.handlers[len(handlers) :]:
+            handler.close()
+        root.handlers = handlers
+        keys.setLevel(before)

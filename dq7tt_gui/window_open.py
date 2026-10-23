@@ -25,7 +25,13 @@ class OpenFlows(DialogFlows):
     _searching: ft.AlertDialog | None
 
     def open_dialog(self, side: PaneSide = PaneSide.LEFT) -> None:
-        """Ask whether to open a folder or a file or zip, then run the matching picker."""
+        """Ask whether to open a folder or a file or zip, then run the matching picker.
+
+        Where single files cannot be opened (Android), go straight to the folder picker.
+        """
+        if not self.model.profile.can_open_files:
+            self.page.run_task(self.pick_and_open, side)
+            return
 
         def build(close: Callable[[], bool]) -> ft.AlertDialog:
             def folder() -> None:
@@ -102,6 +108,6 @@ class OpenFlows(DialogFlows):
                 if close():
                     self._open_path(path)
 
-            return find_saves_dialog(found, open_it, close)
+            return find_saves_dialog(found, open_it, close, self.list_height())
 
         self._present(build)

@@ -9,6 +9,9 @@ from typing import Literal
 from dq7tt.savefile import SlotRole
 from dq7tt.tablets import TabletKind
 
+# The pane action that puts a written Azahar save back in (the desktop wording).
+PUT_INTO_AZAHAR = "Put into Azahar"
+
 
 class NoticeKind(StrEnum):
     INFO = "info"
@@ -73,6 +76,7 @@ class PaneView:
     # Pane actions: bank every tablet of the shown log; put a written Azahar save back in.
     can_bank_all: bool = False
     can_put_into_azahar: bool = False
+    put_label: str = PUT_INTO_AZAHAR
 
 
 @dataclass(frozen=True)
@@ -135,3 +139,5 @@ class ToolbarView:
     redo_label: str | None
     can_write: bool
     write_label: str
+    # Shorter words for the compact strip, when the full ones would not fit there.
+    short_label: str | None = None

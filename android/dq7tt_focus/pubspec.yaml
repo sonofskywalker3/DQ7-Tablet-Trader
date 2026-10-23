@@ -1,0 +1,21 @@
+name: dq7tt_focus
+description: >-
+  Gives the app's Flutter view Android's input focus as soon as it is shown, without the
+  focus frame Android would draw round it, so the first controller press reaches the app.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: io.github.sonofskywalker3.dq7tt_focus
+        pluginClass: Dq7ttFocusPlugin

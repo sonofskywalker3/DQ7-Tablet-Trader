@@ -7,7 +7,9 @@ requires-python = ">=3.12"
 license = "GPL-3.0-or-later"
 dependencies = [
     "flet==1.0.4",
-    "flet-desktop==1.0.4",
+    # The desktop window client; Android builds bring their own, so the APK leaves it out.
+    "flet-desktop==1.0.4; platform_system == 'Windows' or platform_system == 'Darwin' or platform_system == 'Linux'",
+    "flet-permission-handler==1.0.4",
     "platformdirs>=4.13.5",
     "send2trash>=2.1.0",
 ]
@@ -26,12 +28,57 @@ include = ["dq7tt/data/*.json"]
 
 [dependency-groups]
 dev = [
+    "flet-cli==1.0.4",
     "fonttools>=4.67.0",
     "pillow>=13.0.0",
     "pyinstaller>=6.22.3",
     "pytest",
+    "python-dotenv>=1.2.4",
     "ruff",
 ]
+
+[tool.flet]
+org = "io.github.sonofskywalker3"
+product = "DQ7 Tablet Trader"
+artifact = "dq7-tablet-trader"
+bundle_id = "io.github.sonofskywalker3.dq7tablettrader"
+company = "DQ7 Tablet Trader"
+copyright = "GPL-3.0-or-later"
+
+# The window package is the app root, so its assets folder is the one the app serves.
+# Both packages are installed into the app from this project (see android below).
+[tool.flet.app]
+path = "dq7tt_gui"
+module = "main"
+
+# Without Windows Developer Mode, Flutter cannot make the plugin links its Windows and Linux
+# desktop support wants, and that stops the Android build too. The Windows app is made with
+# `flet pack` (tools/build_windows.py), which does not read this.
+[tool.flet.flutter.pubspec.flutter.config]
+enable-windows-desktop = false
+enable-linux-desktop = false
+
+# A small Android plugin of the app's own (android/dq7tt_focus): the Flutter view takes
+# Android's focus at start, so the first controller press reaches the app, and Android's
+# focus frame round the screen is off. The path is relative to build/flutter.
+[tool.flet.flutter.pubspec.dependencies]
+dq7tt_focus = { path = "../../android/dq7tt_focus" }
+
+[tool.flet.android]
+dependencies = ["dq7-tablet-trader"]
+source_packages = ["dq7-tablet-trader"]
+# The launcher icon is dq7tt_gui/assets/icon_android.png (drawn by tools/build_gui_art.py), a
+# finished opaque square on the dark ground; the adaptive icon's back layer matches its edge.
+adaptive_icon_background = "#16120e"
+
+[tool.flet.android.dev_packages]
+dq7-tablet-trader = "."
+
+# All files access, so the app can edit the save where Azahar keeps it. Asked for at first
+# run (dq7tt_gui/android_setup.py). Never add [tool.flet.android.deep_linking]: it stops this
+# permission from working.
+[tool.flet.android.permission]
+"android.permission.MANAGE_EXTERNAL_STORAGE" = true
 
 [tool.ruff]
 line-length = 100

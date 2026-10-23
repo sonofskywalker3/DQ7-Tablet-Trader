@@ -9,7 +9,7 @@ from pathlib import Path
 from dq7tt import output
 from dq7tt.apppaths import AppPaths
 from dq7tt.database import TabletDatabase
-from dq7tt.errors import SessionError, TabletTraderError, ValidationError
+from dq7tt.errors import AzaharRereadError, SessionError, TabletTraderError, ValidationError
 from dq7tt.history import History
 from dq7tt.savefile import SaveFile, SlotRole
 from dq7tt.session_ops import (
@@ -185,10 +185,11 @@ class SessionCore:
             for role, save in self._history.current[source_id].items()
         }
 
-    def write(self, source_id: int, out_dir: Path | None = None) -> Path:
+    def write(self, source_id: int, out_dir: Path | None = None, backup: bool = True) -> Path:
         """Write the edited copy beside or away from the input, never over it; returns it.
 
-        `out_dir` names a new folder to write instead of the default location.
+        `out_dir` names a new folder to write instead of the default location. `backup=False`
+        skips backing the input up, for a copy put into Azahar next (that backs Azahar up).
         """
         source = self._source(source_id)
         if not self.is_dirty(source_id):
@@ -209,7 +210,9 @@ class SessionCore:
             for folder in output.protected_dirs(src)
         ]
         # Saves equal to the disk are copied byte for byte by write_source.
-        out = output.write_source(source, changed, self._paths, self._clock(), protect, out_dir)
+        out = output.write_source(
+            source, changed, self._paths, self._clock(), protect, out_dir, backup
+        )
         self._clean[source_id] = dict(current)
         self._outputs[source_id] = out
         if not any(self.is_dirty(sid) for sid in self._sources if sid != source_id):
@@ -235,7 +238,14 @@ class SessionCore:
                 f"{azahar.label} has changes that were not written. Undo them first."
             )
         backup = output.put_into_azahar(written, azahar.save_dir, self._paths, self._clock())
-        saves = load_saves(azahar)
+        try:
+            saves = load_saves(azahar)
+        except TabletTraderError as exc:
+            log.warning("put into %s, but could not read it back: %s", azahar.label, exc)
+            if azahar_source_id == source_id:
+                # What Azahar holds now is what was written: the current state.
+                self._disk[source_id] = dict(self._history.current[source_id])
+            raise AzaharRereadError(str(exc), backup) from exc
         self._disk[azahar_source_id] = saves
         if azahar_source_id != source_id:
             self._clean[azahar_source_id] = saves

@@ -7,25 +7,22 @@ import flet as ft
 
 from dq7tt.savefile import SlotRole
 from dq7tt_gui import theme
-from dq7tt_gui.viewmodels import PaneSide, PaneView, RightMode
+from dq7tt_gui.viewmodels import PUT_INTO_AZAHAR, PaneSide, PaneView, RightMode
 from dq7tt_gui.widgets import (
     BAR_BUTTON_HEIGHT,
     BUTTON_RADIUS,
-    CHIP_GAP,
     CLEARS_COLUMN_W,
     GRIP_SLOT,
     KIND_COLUMN_W,
-    LOG_CHIP_MIN_W,
     NAME_START,
     ROW_GAP,
     ROW_INSET,
     ROW_PADDING_R,
     bar_button,
-    folder_chip,
     hover_overlay,
-    log_chip,
     text,
 )
+from dq7tt_gui.widgets_chips import CHIP_GAP, LOG_CHIP_MIN_W, folder_chip, log_chip
 from dq7tt_gui.widgets_drag import DragPayload
 from dq7tt_gui.widgets_frame import pointer, rule
 
@@ -42,7 +39,7 @@ HEADER_TOP = 14
 TABS_TOP = 10
 SECTION_GAP = 12
 BANK_ALL_LABEL = "Bank all tablets in this log"
-PUT_LABEL = "Put into Azahar"
+PUT_LABEL = PUT_INTO_AZAHAR  # the desktop wording; panes show their own
 
 # Log chips share their line four to a row when each would still fit "Quick save 6/24",
 # two to a row otherwise. Flet's ResponsiveRow picks its layout by the page's width, so
@@ -84,6 +81,8 @@ class PaneCallbacks:
     on_drop: Callable[[DragPayload, int], object]
     on_bank_all: Callable[[], object]
     on_put_into_azahar: Callable[[], object]
+    # The compact layout: a tap on the pane's header gives it the focus.
+    on_activate: Callable[[], object] | None = None
 
 
 def pane_button(label: str, on_click: Callable[[], object]) -> ft.Button:
@@ -175,7 +174,7 @@ def header(view: PaneView, cbs: PaneCallbacks, mode: RightMode, narrow: bool) ->
         lines.append(_inset(_line([_title(view), pane_button("Close", cbs.on_close)])))
         actions: list[ft.Control] = []
         if not narrow and view.can_put_into_azahar:
-            actions.append(pane_button(PUT_LABEL, cbs.on_put_into_azahar))
+            actions.append(pane_button(view.put_label, cbs.on_put_into_azahar))
         if not narrow and view.can_bank_all:
             actions.append(pane_button(BANK_ALL_LABEL, cbs.on_bank_all))
         if actions:

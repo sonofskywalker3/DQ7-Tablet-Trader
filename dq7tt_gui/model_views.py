@@ -8,7 +8,15 @@ from dq7tt.constants import RECEIVED_SLOTS
 from dq7tt.savefile import SaveFile, SlotRole
 from dq7tt.sources import SaveSource, SourceKind
 from dq7tt.tablets import TabletKind, TabletRecord
-from dq7tt_gui.viewmodels import FolderChip, FoundSave, LogChip, PaneSide, PaneView, TabletRow
+from dq7tt_gui.viewmodels import (
+    PUT_INTO_AZAHAR,
+    FolderChip,
+    FoundSave,
+    LogChip,
+    PaneSide,
+    PaneView,
+    TabletRow,
+)
 
 SECONDS_PER_HOUR = 3600
 SINGLE = 1
@@ -141,6 +149,7 @@ def save_pane(
     rows: tuple[TabletRow, ...],
     dirty: bool,
     can_put_into_azahar: bool = False,
+    put_label: str = PUT_INTO_AZAHAR,
 ) -> PaneView:
     subtitle = LONG_LABELS.get(role, str(role)) + (NOT_WRITTEN if dirty else "")
     return PaneView(
@@ -154,6 +163,7 @@ def save_pane(
         count_text=f"{len(rows)} of {RECEIVED_SLOTS}",
         can_bank_all=bool(rows),
         can_put_into_azahar=can_put_into_azahar,
+        put_label=put_label,
     )
 
 

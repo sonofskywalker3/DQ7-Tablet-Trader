@@ -101,14 +101,19 @@ def _dialog(
         content_padding=ft.Padding.all(0),
         actions_padding=ACTIONS_PADDING,
         on_dismiss=lambda _e: on_dismiss(),
+        # On a short screen a long question scrolls rather than run off the edge; a list of
+        # choices scrolls inside itself instead (see _option_list).
+        scrollable=not listing,
     )
 
 
-def _option_list(items: list[ft.Control], item_height: int) -> ft.Control:
-    """Options stacked in a column that fits them; past LIST_MAX_HEIGHT the column scrolls.
+def _option_list(
+    items: list[ft.Control], item_height: int, max_height: float = LIST_MAX_HEIGHT
+) -> ft.Control:
+    """Options stacked in a column that fits them; past `max_height` the column scrolls.
 
     A scrolling column in a dialog takes all the height it is offered, so only a list too
-    long to fit is made to scroll, and then at a set height.
+    long to fit is made to scroll, and then at a set height (less on a short screen).
     """
     column = ft.Column(
         items,
@@ -116,10 +121,10 @@ def _option_list(items: list[ft.Control], item_height: int) -> ft.Control:
         spacing=LIST_SPACING,
         horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
     )
-    if len(items) * (item_height + LIST_SPACING) - LIST_SPACING <= LIST_MAX_HEIGHT:
+    if len(items) * (item_height + LIST_SPACING) - LIST_SPACING <= max_height:
         return column
     column.scroll = ft.ScrollMode.AUTO
-    return ft.Container(content=column, height=LIST_MAX_HEIGHT)
+    return ft.Container(content=column, height=max_height)
 
 
 def _cancel(on_cancel: Callback) -> ft.Button:
@@ -195,6 +200,7 @@ def choice_dialog(
     on_cancel: Callback,
     empty_text: str = "",
     details: Sequence[tuple[str, bool]] = (),
+    max_height: float = LIST_MAX_HEIGHT,
 ) -> ft.AlertDialog:
     """A menu of choices, one line each. `details` (text, dim) go beside them, in order."""
     body: list[ft.Control] = []
@@ -205,7 +211,7 @@ def choice_dialog(
         body = [_empty(empty_text)]
     return _dialog(
         title,
-        _option_list(body, CHOICE_HEIGHT),
+        _option_list(body, CHOICE_HEIGHT, max_height),
         [_cancel(on_cancel)],
         on_dismiss=on_cancel,
         listing=True,
@@ -222,6 +228,7 @@ def destination_dialog(
     on_pick: Callable[[Destination], object],
     on_cancel: Callback,
     title: str = "Copy to...",
+    max_height: float = LIST_MAX_HEIGHT,
 ) -> ft.AlertDialog:
     """Adventure logs first, then bank folders; a log says who, how long and how full.
 
@@ -232,7 +239,7 @@ def destination_dialog(
     ordered = sorted(dests, key=lambda d: d.kind != "log")
     options = [(_capitalised(d.label), lambda d=d: on_pick(d)) for d in ordered]
     details = [(d.detail, d.full) for d in ordered]
-    return choice_dialog(title, options, on_cancel, NO_DESTINATIONS_TEXT, details)
+    return choice_dialog(title, options, on_cancel, NO_DESTINATIONS_TEXT, details, max_height)
 
 
 def open_choice_dialog(
@@ -298,7 +305,10 @@ def _source_button(found: FoundSave, on_open: Callable[[Path], object]) -> ft.Bu
 
 
 def find_saves_dialog(
-    found: Sequence[FoundSave], on_open: Callable[[Path], object], on_cancel: Callback
+    found: Sequence[FoundSave],
+    on_open: Callable[[Path], object],
+    on_cancel: Callback,
+    max_height: float = LIST_MAX_HEIGHT,
 ) -> ft.AlertDialog:
     """One button per save found: label, path and how many adventure logs it holds."""
     body: list[ft.Control] = [_source_button(f, on_open) for f in found]
@@ -306,7 +316,7 @@ def find_saves_dialog(
         body = [_empty(NO_SAVES_TEXT)]
     return _dialog(
         FOUND_TITLE,
-        _option_list(body, SOURCE_BUTTON_HEIGHT),
+        _option_list(body, SOURCE_BUTTON_HEIGHT, max_height),
         [_cancel(on_cancel)],
         on_dismiss=on_cancel,
         listing=True,

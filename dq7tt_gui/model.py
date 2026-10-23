@@ -5,17 +5,27 @@ from collections.abc import Callable, Sequence
 from functools import partial
 from pathlib import Path
 
+from dq7tt.apppaths import android_storage, load_settings
 from dq7tt.bank import ROOT_FOLDER
 from dq7tt.errors import BankFileError, SaveIOError, SessionError, TabletTraderError
 from dq7tt.savefile import SlotRole
-from dq7tt.scan import default_roots, scan
+from dq7tt.scan import android_roots, android_volumes, default_roots, scan
 from dq7tt.session import Target
-from dq7tt.sources import SaveSource
+from dq7tt.sources import SaveSource, SourceKind
 from dq7tt_gui import model_views as views
+from dq7tt_gui.device_profile import Platform
 from dq7tt_gui.model_base import BANK_KIND
 from dq7tt_gui.model_files import SIDES, SaveOps
-from dq7tt_gui.model_text import BANK_WRITE, FILE_TROUBLE, NO_LOG, NOT_IN_LIST, bank_problem
+from dq7tt_gui.model_text import (
+    BANK_WRITE,
+    EMPTY_FORMAT,
+    FILE_TROUBLE,
+    NO_LOG,
+    NOT_IN_LIST,
+    bank_problem,
+)
 from dq7tt_gui.viewmodels import (
+    PUT_INTO_AZAHAR,
     ActionBar,
     Destination,
     FoundSave,
@@ -32,6 +42,8 @@ log = logging.getLogger(__name__)
 
 WRITE_ONE = "Write changes"
 WRITE_BOTH = "Write changes to both saves"
+WRITE_BOTH_SHORT = "Write both"
+SAVE_INTO = "Save into Azahar"
 
 
 class AppModel(SaveOps):
@@ -61,6 +73,10 @@ class AppModel(SaveOps):
         folders = views.folder_chips(counts, self._folder)
         return views.bank_pane(side, str(self._bank.root), chips, folders, rows)
 
+    def has_save(self, side: PaneSide) -> bool:
+        """A save is open on this side (on the right, possibly behind the bank)."""
+        return self._ids[side] is not None
+
     def right_mode(self) -> RightMode:
         return RightMode.BANK if self._bank_shown else RightMode.SAVE
 
@@ -72,13 +88,25 @@ class AppModel(SaveOps):
         return views.tab_label(self._session.sources()[sid].source.kind)
 
     def toolbar(self) -> ToolbarView:
-        dirty = self.dirty_sides()
+        sides = self.write_sides()
+        label = WRITE_BOTH if len(sides) == len(SIDES) else WRITE_ONE
+        # Save into Azahar when every save Write acts on is an Azahar save; with nothing to
+        # write, when an open save is one.
+        if self._profile.one_step_azahar:
+            open_sides = [s for s in SIDES if self._ids[s] is not None]
+            azahar = [s for s in (sides or open_sides) if self._is_azahar(s)]
+            if azahar and (not sides or len(azahar) == len(sides)):
+                label = SAVE_INTO
         return ToolbarView(
             undo_label=self._session.undo_label,
             redo_label=self._session.redo_label,
-            can_write=bool(dirty),
-            write_label=WRITE_BOTH if len(dirty) == len(SIDES) else WRITE_ONE,
+            can_write=bool(sides),
+            write_label=label,
+            short_label=WRITE_BOTH_SHORT if label == WRITE_BOTH else None,
         )
+
+    def empty_text(self) -> str:
+        return EMPTY_FORMAT.format(device=self._profile.device_word)
 
     def action_bar(self) -> ActionBar:
         count = len(self._sel)
@@ -124,16 +152,35 @@ class AppModel(SaveOps):
         return found
 
     def has_unwritten(self) -> bool:
-        return any(self._session.is_dirty(sid) for sid in self._session.sources())
+        return any(self._unsaved(sid) for sid in self._session.sources())
 
     def dirty_sides(self) -> list[PaneSide]:
         return [
             s for s in SIDES if (sid := self._ids[s]) is not None and self._session.is_dirty(sid)
         ]
 
+    def write_sides(self) -> list[PaneSide]:
+        """The sides Write acts on: unwritten changes, and with one-step saving also an Azahar
+        save whose last Save into Azahar did not finish."""
+        dirty = self.dirty_sides()
+        if not self._profile.one_step_azahar:
+            return dirty
+        return [
+            s
+            for s in SIDES
+            if s in dirty or ((sid := self._ids[s]) is not None and self._unsaved(sid))
+        ]
+
     def scan_results(self, roots: Sequence[Path] | None = None) -> list[SaveSource]:
-        found = default_roots() if roots is None else list(roots)
+        found = self._search_roots() if roots is None else list(roots)
         return scan(found, self._paths.work_dir)
+
+    def _search_roots(self) -> list[Path]:
+        """Where Find saves looks: emulator folders and removable drives for this device."""
+        if self._profile.platform is not Platform.ANDROID:
+            return default_roots()
+        remembered = load_settings(self._paths).azahar_dir
+        return android_roots(android_storage(), remembered, android_volumes())
 
     def find_saves(
         self, roots: Sequence[Path] | None = None
@@ -244,7 +291,14 @@ class AppModel(SaveOps):
         rows = views.save_rows(side, self._session.tablets(self._target(side)), selected)
         dirty = role in self._session.dirty_roles(sid)
         put = self._can_put_into_azahar(sid)
-        return views.save_pane(side, opened.source.label, opened.edited, role, rows, dirty, put)
+        put_label = SAVE_INTO if self._profile.one_step_azahar else PUT_INTO_AZAHAR
+        return views.save_pane(
+            side, opened.source.label, opened.edited, role, rows, dirty, put, put_label
+        )
+
+    def _is_azahar(self, side: PaneSide) -> bool:
+        sid = self._ids[side]
+        return sid is not None and self._session.sources()[sid].source.kind is SourceKind.AZAHAR
 
     def _can_reset(self) -> bool:
         side = self._sel_side

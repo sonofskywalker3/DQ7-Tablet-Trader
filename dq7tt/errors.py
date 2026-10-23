@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from enum import StrEnum
+from pathlib import Path
 
 
 class TabletTraderError(Exception):
@@ -97,3 +98,24 @@ class BankFileError(TabletTraderError):
 
 class SessionError(TabletTraderError):
     """The request cannot be carried out in the current session."""
+
+
+class AzaharReplaceError(SaveIOError):
+    """Copying edited saves into Azahar failed after its save was backed up to `backup`.
+
+    `restored` is True when Azahar's save was left, or put back, exactly as it was.
+    """
+
+    def __init__(self, message: str, backup: Path, restored: bool) -> None:
+        super().__init__(message)
+        self.backup = backup
+        self.restored = restored
+
+
+class AzaharRereadError(SaveIOError):
+    """The edited saves are in Azahar (its old save backed up to `backup`), but reading
+    Azahar's save back afterwards failed."""
+
+    def __init__(self, message: str, backup: Path) -> None:
+        super().__init__(message)
+        self.backup = backup

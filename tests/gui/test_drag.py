@@ -268,7 +268,7 @@ def test_window_redraw_after_a_tick_keeps_the_same_list(tmp_path: Any) -> None:
 
 
 def test_narrow_tick_keeps_list_offset_and_selected_tab(tmp_path: Any) -> None:
-    win, _ = make(tmp_path, width=600.0)
+    win, _ = make(tmp_path, width=500.0)
     tabs = win._body.content
     lv = find(tabs, ft.ReorderableListView)[0]
     lv.on_scroll(scroll_event(lv, 80.0))
@@ -283,7 +283,7 @@ def test_narrow_tick_keeps_list_offset_and_selected_tab(tmp_path: Any) -> None:
 def test_wide_narrow_wide_keeps_each_panes_list(tmp_path: Any) -> None:
     win, _ = make(tmp_path)
     before = win._shells[PaneSide.LEFT].list_control()
-    win.apply_width(600.0)
+    win.apply_width(500.0)
     assert win._shells[PaneSide.LEFT].list_control() is before
     assert find(win._body.content, ft.ReorderableListView)[0] is before
     win.apply_width(1280.0)
@@ -307,3 +307,47 @@ def test_close_and_reopen_drops_by_unscrolled_position(tmp_path: Any) -> None:
     win.model.drop = lambda *a: log.append(a) or []  # type: ignore[method-assign]
     left.on_accept(accept(DragPayload(PaneSide.RIGHT, (0,)), theme.ROW_HEIGHT * 2.0))
     assert log == [(PaneSide.RIGHT, (0,), PaneSide.LEFT, 2)]
+
+
+@pytest.mark.parametrize("h", [theme.ROW_HEIGHT, theme.ANDROID_ROW_HEIGHT])
+def test_drag_positions_with_48_rows(h: int) -> None:
+    """The drop maths and the pointer follow the pane's own row height (40 on a PC, 48 on
+    Android), not a fixed one."""
+    assert drop_index(-30.0, 5, row_height=h) == 0
+    assert drop_index(h * 0.4, 5, row_height=h) == 0
+    assert drop_index(h * 0.6, 5, row_height=h) == 1
+    assert drop_index(h * 1.0 - 1, 5, row_height=h) == 1
+    assert drop_index(h * 99, 5, row_height=h) == 5
+    assert drop_index(h * 2.0, 20, scroll=h * 10, row_height=h) == 12
+
+    log: list[object] = []
+    cbs = callbacks(log)
+    cbs.on_drop = lambda p, i: log.append(i)
+    view = pane_view(
+        PaneSide.RIGHT,
+        rows=tuple(replace(row(), index=i, key=f"right:{i}") for i in range(20)),
+    )
+    shell = PaneShell(row_height=h)
+    ctl = shell.update(view, cbs, RightMode.SAVE)
+    assert shell.row_height == h
+    (target,) = find(ctl, ft.DragTarget)
+    lv = shell.list_control()
+    assert lv is not None
+    lv.on_scroll(scroll_event(lv, h * 10))
+    target.on_accept(accept(DragPayload(PaneSide.LEFT, (0,)), h * 2.0))
+    target.on_accept(accept(DragPayload(PaneSide.LEFT, (0,)), h * 0.6))
+    assert log == [12, 11]
+    rows = [c for c in walk(ctl) if getattr(c, "data", None) == "right:0" and c.height]
+    assert rows and all(c.height == h for c in rows)
+
+
+def test_drop_target_sits_in_an_expanding_container() -> None:
+    """Flet 1.0.4 ignores `expand` on a DragTarget (drag_target.dart has no LayoutControl), so
+    the list under it got unbounded height, laid itself out at full length and could not
+    scroll. An expanding Container around it gives the list the pane's height."""
+    shell = PaneShell()
+    ctl = shell.update(three_rows(PaneSide.LEFT), callbacks([]), RightMode.SAVE)
+    holders = [
+        c for c in walk(ctl) if isinstance(c, ft.Container) and isinstance(c.content, ft.DragTarget)
+    ]
+    assert holders and all(h.expand for h in holders)

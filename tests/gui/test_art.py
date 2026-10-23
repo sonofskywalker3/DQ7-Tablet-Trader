@@ -93,3 +93,47 @@ def test_body_font_takes_the_lining_glyphs_from_the_source_fonts_lnum() -> None:
     lining = tool.lining_map(source)
     for digit in tool.DIGITS:
         assert built[ord(digit)] == lining[source.getBestCmap()[ord(digit)]], digit
+
+
+ICON_NAME = "icon_android.png"
+FLET_ICON_SIZE = 1024
+
+
+def test_launcher_icon_path_reader_follows_lines_and_closes_shapes() -> None:
+    icon = load_tool("launcher_icon")
+    assert icon.path_points("M1 2 L3 4 H5 V6 Z M7 8 V9") == [
+        [(1.0, 2.0), (3.0, 4.0), (5.0, 4.0), (5.0, 6.0), (1.0, 2.0)],
+        [(7.0, 8.0), (7.0, 9.0)],
+    ]
+
+
+def test_launcher_icon_is_committed_where_flet_build_finds_it_and_is_current(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from PIL import Image, ImageChops
+
+    monkeypatch.syspath_prepend(str(ROOT / "tools"))
+    tool = load_tool("build_gui_art")
+    assert tool.LAUNCHER_ICON == art.ASSETS_DIR / ICON_NAME
+    committed = Image.open(tool.LAUNCHER_ICON)
+    # A finished opaque square: flet build uses icon_android.png as it is, without reframing.
+    assert committed.size == (FLET_ICON_SIZE, FLET_ICON_SIZE)
+    assert committed.mode == "RGB"
+    drawn = tool.draw_icon(tool.WHOLE, tool.STONES[tool.LAUNCHER_ICON_KIND], tool.SUN_RAYS)
+    assert ImageChops.difference(drawn, committed.convert("RGB")).getbbox() is None
+
+
+def test_launcher_icon_keeps_its_drawing_inside_the_adaptive_safe_circle() -> None:
+    from PIL import Image
+
+    icon = load_tool("launcher_icon")
+    image = Image.open(art.ASSETS_DIR / ICON_NAME).convert("RGB")
+    side = image.width
+    ground = image.getpixel((0, 0))
+    safe_radius = side * 33 / 108  # Android always shows a centred circle 66 of 108 wide
+    for x in range(0, side, 8):
+        for y in range(0, side, 8):
+            if (x - side / 2) ** 2 + (y - side / 2) ** 2 > safe_radius**2:
+                pixel = image.getpixel((x, y))
+                # Outside the circle there is only the dark ground, no gold and no stone.
+                assert max(pixel) <= max(icon._hex(icon.GROUND_CENTRE)), (x, y, pixel, ground)

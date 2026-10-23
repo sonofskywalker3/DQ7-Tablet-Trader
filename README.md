@@ -16,7 +16,7 @@ The app writes a small log file to `%LOCALAPPDATA%\DQ7 Tablet Trader\logs`, whic
 
 ## Using the window
 
-**The app never changes your original save.** Every edit is written to a new copy, and a backup is taken first. Your Checkpoint, JKSM or Azahar save stays exactly as it was until you choose to put an edited copy back yourself.
+**The app never changes your original save.** Every edit is written to a new copy, and a backup is taken first. Your Checkpoint, JKSM or Azahar save stays exactly as it was until you choose to put an edited copy back yourself. On Android, Save into Azahar is that choice: it backs up Azahar's save to the backups folder, then replaces it with the edited copy.
 
 ### Open and find saves
 
@@ -60,6 +60,37 @@ Edited saves are unverified on a real 3DS until tested, so keep your backups.
 
 Dragging a save in from Windows Explorer, and editing self-made or StreetPass tablets, are not available yet.
 
+## Android (AYN Thor)
+
+There is also an Android app, made for the AYN Thor's top screen and Azahar running on the same handheld. It works on other Android devices too, with the save and the bank on tabs instead of side by side.
+
+### Install
+
+Download `DQ7 Tablet Trader 0.1.0.apk` from the releases page once there is one, or copy it to the handheld's Download folder over USB. Open it from the Files app and tap Install. The app is not on Google Play, so the first time Android asks whether the Files app (or your browser) may install apps: allow it, then go back and tap Install again.
+
+### First start
+
+1. **Allow access to your saves.** Android opens its All files access page. Turn DQ7 Tablet Trader on there, then come back to the app. The app needs this to change the save where Azahar keeps it.
+2. **Choose your Azahar folder.** This is usually the folder called `Azahar` in internal storage. Picking a folder inside it works as well. The app then opens your Dragon Quest VII save with the bank beside it.
+
+Only folders can be opened on Android: Azahar's folder, or Checkpoint and JKSM backup folders on an SD card. A single save file or a zip is not offered, because Android hands the app a copy of a picked file, so an edit could not go back where the file came from.
+
+### Use it on the top screen
+
+On the Thor, long-press the app in the launcher, choose Screen Launch, then Top Screen. The save fills the left side and the bank the right. On the bottom screen or a phone, the save and the bank are on two tabs.
+
+- **Touch:** tap a tablet to tick it. Swipe up or down to scroll. Drag a tablet sideways to copy it to the other side. Long-press a tablet, then move it, to change its place in the log.
+- **Controller:** the D-pad moves the gold pointer. A ticks a tablet or presses a button. B closes a question, or clears the ticks; it never leaves the app. L and R switch between the save and the bank. Y ticks every tablet. Start saves (it asks first).
+- If you press Android's Back with changes that are not saved yet, the app asks first.
+
+### Saving into Azahar
+
+**Close the game in Azahar before saving.** On Android, Save into Azahar is one step: after you confirm, the app backs up Azahar's current save, then writes your edited save straight into Azahar's folder. It is all or nothing: if anything goes wrong part way, Azahar's save is put back as it was and the app says so. In the rare case it cannot be put back, the app names the backup to restore from the backups folder. When it is done, start the game in Azahar and load as usual.
+
+### Where the files go
+
+The bank, the backups and edited copies are kept in a folder called `DQ7 Tablet Trader` in internal storage, with `bank`, `backups` and `edited` inside. It stays when the app is uninstalled, and you can copy it to a PC over USB. The app's settings and its log file are kept in the app's own storage.
+
 ## Run from source
 
 You need [uv](https://docs.astral.sh/uv/). From the project folder:
@@ -70,6 +101,8 @@ uv run dq7tt-gui
 ```
 
 To build the exe yourself: `uv run python tools/build_windows.py`. The result is in `dist`.
+
+To build the Android app: `uv run python tools/build_android.py --arch arm64-v8a` (add `--release` for a build signed with your own key, after `--make-keystore` once). The APK is copied to `build/android`, named for its architecture.
 
 ## Fixed in this version
 
@@ -84,7 +117,7 @@ To build the exe yourself: `uv run python tools/build_windows.py`. The result is
 - DaniPhoFani and Gronya: the preserved saves used for testing.
 - Fonts: Sorts Mill Goudy by Barry Schwartz and Cinzel by the Cinzel Project Authors, both under the SIL Open Font License 1.1. The licence texts ship beside the fonts in `dq7tt_gui/assets/fonts`.
 - The window's text uses Sorts Mill Goudy Lining, a copy of Sorts Mill Goudy made by `tools/build_lining_font.py` so that plain digits draw as the font's own lining figures; it keeps the same licence.
-- The window's parchment, border bands, compass rose, pointer and tablet stones are drawn for this app by `tools/build_gui_art.py`; no game art is used.
+- The window's parchment, border bands, compass rose, pointer and tablet stones, and the Android app's icon, are drawn for this app by `tools/build_gui_art.py`; no game art is used.
 
 ## Command line (for testing)
 

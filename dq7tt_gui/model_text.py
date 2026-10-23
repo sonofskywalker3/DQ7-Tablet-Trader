@@ -5,6 +5,7 @@ from dq7tt.errors import BankFileError, BankProblem, TabletTraderError
 NOT_IN_LIST = "That tablet is not in this list."
 NO_LOG = "That adventure log is not in this save."
 DISCARD_TITLE = "Discard changes?"
+EMPTY_FORMAT = "Open a save or find saves on {device}"
 BANK_MOVE_TO_LOG = (
     "Tablets in the bank are copied into an adventure log, never moved. Use Copy to... instead."
 )

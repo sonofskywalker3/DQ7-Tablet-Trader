@@ -8,6 +8,7 @@ marks where you are; ticked rows get a gold wash.
 import flet as ft
 
 from dq7tt.tablets import TabletKind
+from dq7tt_gui.layout import NARROW_WIDTH as NARROW_WIDTH  # the wide layout from here
 
 
 def _alpha(opacity: float, colour: str) -> str:
@@ -114,8 +115,24 @@ LOGO_SMALL_SIZE = 13
 LOGO_SIZE = 25
 
 ROW_HEIGHT = 40
+# Android rows are touch targets: 48 dp at the least.
+ANDROID_ROW_HEIGHT = 48
+# The compact layouts' two-line rows need 48 on every platform.
+COMPACT_ROW_HEIGHT = 48
 PANE_RADIUS = WINDOW_RADIUS
-NARROW_WIDTH = 900
+
+# The compact layout (the Thor's top screen): slim strips, small gaps, two-line rows.
+STRIP_HEIGHT = 48
+STRIP_BUTTON_HEIGHT = 36
+COMPACT_GAP = 6
+PANE_HEAD_HEIGHT = 32
+COMPACT_NAME_SIZE = 18
+COMPACT_META_SIZE = 13
+BADGE_SIZE = 12
+BADGE_HEIGHT = 18
+PANE_HEAD_SIZE = 14
+PANE_TITLE_SIZE = 13
+KEY_CAP_SIZE = 11
 WINDOW_W = 1280
 WINDOW_H = 800
 MIN_W = 480

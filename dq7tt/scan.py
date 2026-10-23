@@ -9,14 +9,20 @@ from pathlib import Path
 
 from dq7tt.constants import SAVE_FILENAMES
 from dq7tt.errors import TabletTraderError
-from dq7tt.sources import TITLE_LOWIDS, SaveSource, open_source
+from dq7tt.sources import TITLE_LOWIDS, SaveSource, SourceKind, open_source
 
 log = logging.getLogger(__name__)
 
 APPDATA_VAR = "APPDATA"
 EMULATOR_FOLDERS = ("Azahar", "Citra", "Lime3DS")
+ANDROID_EMULATOR_FOLDERS = ("Azahar", "azahar", "citra-emu", "lime3ds-emu")
+SDMC_FOLDER = "sdmc"
+MAX_PICK_ANCESTORS = 10
 DRIVE_REMOVABLE = 2
 HIDDEN_PREFIX = "."
+ANDROID_VOLUMES_ROOT = Path("/storage")
+# Under /storage these lead back to internal storage, which is searched on its own.
+NOT_VOLUMES = frozenset({"emulated", "self"})
 ANY = "*"
 LOWID_STEP = "<lowid>"
 LOWID_NAMES = frozenset(f"{lowid:08x}" for lowid in TITLE_LOWIDS.values())
@@ -140,3 +146,57 @@ def scan(roots: Sequence[Path], work_dir: Path, max_depth: int = 8) -> list[Save
                     found.append((fresh, source))
     found.sort(key=lambda pair: pair[0], reverse=True)
     return [source for _, source in found]
+
+
+def android_roots(storage: Path, azahar_dir: Path | None, volumes: Sequence[Path]) -> list[Path]:
+    """Remembered Azahar folder, known emulator folders on storage, then mounted volumes."""
+    candidates: list[Path] = [azahar_dir] if azahar_dir else []
+    candidates.extend(storage / name for name in ANDROID_EMULATOR_FOLDERS)
+    candidates.extend(Path(v) for v in volumes)
+    roots: list[Path] = []
+    for folder in candidates:
+        if folder.is_dir() and folder not in roots:
+            roots.append(folder)
+    return roots
+
+
+def android_volumes(root: Path = ANDROID_VOLUMES_ROOT) -> list[Path]:
+    """SD cards and USB drives mounted on an Android device."""
+    return [folder for folder in _children(root) if folder.name not in NOT_VOLUMES]
+
+
+def _has_sdmc(folder: Path) -> bool:
+    return any(_matches(SDMC_FOLDER, c.name) for c in _children(folder))
+
+
+def _azahar_user_folder(picked: Path) -> Path | None:
+    """The nearest folder at or above `picked` that holds `sdmc`, within a bounded climb."""
+    folder = picked
+    for _ in range(MAX_PICK_ANCESTORS + 1):
+        if _has_sdmc(folder):
+            return folder
+        if folder.parent == folder:
+            return None
+        folder = folder.parent
+    return None
+
+
+def find_azahar_save(picked: Path, work_dir: Path) -> SaveSource | None:
+    """The DQ7 save at or under `picked`, or in the Azahar user folder that contains it.
+
+    If several saves exist (for example US and EU) the first from `scan` is returned,
+    which is the freshest. A Japanese save is never returned.
+    """
+    picked = Path(picked)
+    found = _azahar_only(scan([picked], work_dir))
+    if found:
+        return found[0]
+    user = _azahar_user_folder(picked)
+    if user is None or user == picked:
+        return None
+    found = _azahar_only(scan([user], work_dir))
+    return found[0] if found else None
+
+
+def _azahar_only(sources: Sequence[SaveSource]) -> list[SaveSource]:
+    return [s for s in sources if s.kind is SourceKind.AZAHAR]

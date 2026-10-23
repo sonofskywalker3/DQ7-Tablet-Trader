@@ -2,9 +2,10 @@
 
 Run from the repo root: `uv run python tools/build_gui_art.py`.
 Everything here is drawn from scratch: the parchment ground, the engraved bands, the compass
-rose, the gold pointer and one carved stone per tablet kind. The output is committed, so this
-only needs running again after the drawings change. Random parts use fixed seeds, so a rerun
-gives the same files.
+rose, the gold pointer, one carved stone per tablet kind and the Android launcher icon
+(`icon_android.png`, drawn by `launcher_icon.py` from the story stone). The output is
+committed, so this only needs running again after the drawings change. Random parts use fixed
+seeds, so a rerun gives the same files.
 """
 
 import logging
@@ -12,6 +13,7 @@ import math
 import random
 from pathlib import Path
 
+from launcher_icon import draw_icon
 from PIL import Image, ImageDraw, ImageFilter
 
 logger = logging.getLogger("build_gui_art")
@@ -19,6 +21,9 @@ logger = logging.getLogger("build_gui_art")
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "dq7tt_gui" / "assets"
 TABLETS = ASSETS / "tablets"
+# `flet build apk` takes the launcher icon from the app's assets under this name.
+LAUNCHER_ICON = ASSETS / "icon_android.png"
+LAUNCHER_ICON_KIND = "story"
 
 # Parchment ground, sized for a 1280x800 window at 150% scale and cropped to fit.
 PARCHMENT_W, PARCHMENT_H = 1600, 1000
@@ -293,6 +298,7 @@ def main() -> int:
     band.save(ASSETS / "band_top.png", optimize=True)
     band.transpose(Image.Transpose.FLIP_TOP_BOTTOM).save(ASSETS / "band_bottom.png", optimize=True)
     parchment().save(ASSETS / "parchment.png", optimize=True)
+    draw_icon(WHOLE, STONES[LAUNCHER_ICON_KIND], SUN_RAYS).save(LAUNCHER_ICON, optimize=True)
     for path in sorted(ASSETS.rglob("*.*")):
         logger.info("%s  %d bytes", path.relative_to(ROOT).as_posix(), path.stat().st_size)
     return 0

@@ -20,6 +20,7 @@ from dq7tt.session import Session, Target
 from dq7tt.tablet_list import ReceivedList
 from dq7tt.tablets import TabletRecord
 from dq7tt.validate import Severity, validate
+from dq7tt_gui.device_profile import DESKTOP_PROFILE, Profile
 from dq7tt_gui.model_text import (
     BANK_READ,
     FILE_TROUBLE,
@@ -63,10 +64,12 @@ class ModelBase:
     def __init__(
         self,
         paths: AppPaths,
+        profile: Profile = DESKTOP_PROFILE,
         bank_root: Path | None = None,
         clock: Callable[[], datetime] = datetime.now,
     ) -> None:
         self._paths = paths
+        self._profile = profile
         self._session = Session(paths, clock=clock)
         root = (
             bank_root if bank_root is not None else effective_bank_dir(paths, load_settings(paths))
@@ -84,6 +87,12 @@ class ModelBase:
         self._quick_ok = False
         # The written output each save last put into Azahar; it is not offered twice.
         self._put_outputs: dict[int, Path] = {}
+        # The work folder each save was last written to on its way into Azahar (one step).
+        self._staging: dict[int, Path] = {}
+
+    @property
+    def profile(self) -> Profile:
+        return self._profile
 
     # Where things are
 

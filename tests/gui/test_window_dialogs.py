@@ -127,7 +127,7 @@ def test_page_width_none_falls_back_to_the_default(tmp_path: Path) -> None:
 
 
 def test_tab_index_survives_refresh_when_narrow(tmp_path: Path) -> None:
-    win, _ = make(tmp_path, 600.0)
+    win, _ = make(tmp_path, 500.0)
     tabs = next(c for c in walk(win.build()) if isinstance(c, ft.Tabs))
     tabs.selected_index = 1
     win._on_tab(SimpleNamespace(control=tabs))  # type: ignore[arg-type]
