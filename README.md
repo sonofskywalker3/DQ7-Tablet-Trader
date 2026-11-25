@@ -145,3 +145,7 @@ dq7tt azahar put EDITED_DIR AZAHAR_SAVE_DIR
 - `azahar put` checks that EDITED_DIR holds Dragon Quest VII saves the game would accept, backs up the Azahar save folder, then copies the edited saves into it, and prints the backup zip.
 
 Anything that would produce a save the game might reject is refused with a message and exit status 2. Edited saves are unverified on a real 3DS until tested.
+
+## Artwork
+
+Where each piece of artwork comes from and how it was made: [ART-SOURCES.md](ART-SOURCES.md).
